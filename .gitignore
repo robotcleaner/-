@@ -1,0 +1,29 @@
+# 敏感 / 本地文件
+.streamlit/secrets.toml
+.env
+*.env
+
+# 运行时产生的缓存和中间文件
+.cache.json
+fault_mapping_*.json
+partial_result_*.csv
+partial_result_*.xlsx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Excel 输出（可选，如果不想上传）
+优化后工单.xlsx
+已处理部分.xlsx
