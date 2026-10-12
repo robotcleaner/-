@@ -203,4 +203,6 @@ if uploaded is not None:
 
 with st.sidebar:
     st.divider()
-    if st.button("🗑 清空本次会话已处理
+    if st.button("🗑 清空本次会话已处理记录"):
+        st.session_state[CACHE_KEY] = pd.DataFrame(columns=OUTPUT_COLUMNS)
+        st.success("已清空")
