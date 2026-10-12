@@ -1,13 +1,32 @@
+# llm_client.py
 import hashlib
 import json
+import os
 from pathlib import Path
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
-from config import (
-    SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,
-    MODEL_TRANSLATE, MODEL_CLASSIFY,
-    TEMPERATURE, MAX_TOKENS, TIMEOUT, MAX_RETRY,
-)
+
+# ==================== 配置加载（兼容本地 + 云端）====================
+def _load_secret(key: str, default: str = "") -> str:
+    """优先从 st.secrets 读，本地开发 fallback 到环境变量"""
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return os.getenv(key, default)
+
+
+SILICONFLOW_API_KEY = _load_secret("SILICONFLOW_API_KEY", "")
+SILICONFLOW_BASE_URL = _load_secret("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1")
+MODEL_TRANSLATE = _load_secret("MODEL_TRANSLATE", "deepseek-ai/DeepSeek-V3")
+MODEL_CLASSIFY  = _load_secret("MODEL_CLASSIFY",  "deepseek-ai/DeepSeek-V3")
+
+TEMPERATURE = 0.1
+MAX_TOKENS  = 2000
+TIMEOUT     = 60
+MAX_RETRY   = 3
 
 client = OpenAI(
     api_key=SILICONFLOW_API_KEY,
@@ -15,24 +34,12 @@ client = OpenAI(
     timeout=TIMEOUT,
 )
 
-CACHE_FILE = Path(".cache.json")
+# ==================== 内存缓存（替代 .cache.json）====================
 _cache = {}
-if CACHE_FILE.exists():
-    try:
-        _cache = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        _cache = {}
 
 
 def _cache_key(text: str, task: str) -> str:
     return hashlib.md5(f"{task}::{text}".encode("utf-8")).hexdigest()
-
-
-def _save_cache():
-    CACHE_FILE.write_text(
-        json.dumps(_cache, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
 
 
 def _is_empty(text) -> bool:
@@ -75,12 +82,10 @@ def translate(text: str, task: str = "translate") -> str:
         return ""
 
     _cache[key] = result
-    _save_cache()
     return result
 
 
 def classify_fault_from_sku(sku_text: str) -> str:
-    """从备件 SKU 推断故障类型（LLM 兜底，不写缓存，由 processor 写）"""
     if _is_empty(sku_text):
         return ""
     key = _cache_key(sku_text, "fault_from_sku")
@@ -93,18 +98,15 @@ def classify_fault_from_sku(sku_text: str) -> str:
 
     if not result or len(result) > 30:
         return ""
-    # 只保留前 12 个字符，避免模型话多
     result = result.replace("【", "").replace("】", "").strip()[:12]
     if "未知" in result or "无法" in result:
         return ""
 
     _cache[key] = result
-    _save_cache()
     return result
 
 
 def classify_credit_claim(text: str) -> str:
-    """判断 credit_claim 是 退货 / 更换整机 / 更换备件/配件"""
     if _is_empty(text):
         return "更换备件/配件"
     key = _cache_key(text, "credit_claim")
@@ -124,5 +126,4 @@ def classify_credit_claim(text: str) -> str:
         result = "更换备件/配件"
 
     _cache[key] = result
-    _save_cache()
     return result
