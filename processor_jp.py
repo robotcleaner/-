@@ -15,27 +15,17 @@ from config_jp import (
     JP_PROMPT_PROCESS_RESULT,
 )
 from config import PRODUCT_BU_MAP
+from config_common import is_mova_ticket, is_old_model
 from llm_client import _call_llm, MODEL_TRANSLATE, MODEL_CLASSIFY
 
 
 # ==================== 加载官方故障对照表 ====================
-# 兼容本地路径 + Streamlit Cloud 路径
-def _find_fault_table() -> Path:
-    candidates = [
-        Path("产品故障分类中英韩日文.xlsx"),
-        Path(__file__).parent / "产品故障分类中英韩日文.xlsx",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    return None
-
-
-FAULT_TABLE_FILE = _find_fault_table()
+FAULT_TABLE_FILE = "产品故障分类中英韩日文.xlsx"
 JP_TO_CN_FAULT_STD = {}
 JP_FAULT_CN_LIST = []
+JP_KEYWORD_MAP = {}
 
-if FAULT_TABLE_FILE:
+if Path(FAULT_TABLE_FILE).exists():
     try:
         df_fault = pd.read_excel(FAULT_TABLE_FILE, sheet_name="故障分类")
         for _, r in df_fault.iterrows():
@@ -90,7 +80,7 @@ def _is_blank(s) -> bool:
     t = str(s).strip()
     if not t:
         return True
-    if t.lower() in ("nan", "none", "null", "nat", "/", "-"):
+    if t.lower() in ("nan", "none", "null", "nat", "/", "-", "／"):
         return True
     return False
 
@@ -109,8 +99,10 @@ def _normalize_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _get_col(row, name):
+    if name in row.index:
+        return row.get(name, "")
     for c in row.index:
-        if name in str(c):
+        if name and name in str(c):
             return row.get(c, "")
     return ""
 
@@ -121,8 +113,21 @@ def _normalize_jp_text(text: str) -> str:
     return s.lower()
 
 
-# ==================== 内存缓存（替代 fault_mapping_jp.json）====================
-_jp_cache = {}   # 进程内存，不落盘
+# ==================== 本地缓存 ====================
+JP_CACHE_FILE = "fault_mapping_jp.json"
+_jp_cache = {}
+if Path(JP_CACHE_FILE).exists():
+    try:
+        _jp_cache = json.loads(Path(JP_CACHE_FILE).read_text(encoding="utf-8"))
+    except Exception:
+        _jp_cache = {}
+
+
+def _save_jp_cache():
+    Path(JP_CACHE_FILE).write_text(
+        json.dumps(_jp_cache, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 # ==================== 日译中 ====================
@@ -139,6 +144,7 @@ def jp_translate(text: str) -> str:
     if "无法翻译" in result or "请提供" in result:
         return ""
     _jp_cache[key] = result
+    _save_jp_cache()
     return result
 
 
@@ -149,23 +155,19 @@ def translate_fault_class(text: str) -> str:
     t_orig = str(text).strip()
     t_norm = _normalize_jp_text(t_orig)
 
-    # ① 精确匹配
     for jp_std, cn_std in JP_TO_CN_FAULT_STD.items():
         if _normalize_jp_text(jp_std) == t_norm:
             return cn_std
 
-    # ② 包含匹配
     for jp_std, cn_std in JP_TO_CN_FAULT_STD.items():
         jp_norm = _normalize_jp_text(jp_std)
         if jp_norm and (jp_norm in t_norm or t_norm in jp_norm):
             return cn_std
 
-    # ③ 关键词应急表
     for kw, cn_std in JP_KEYWORD_EMERGENCY.items():
         if kw.lower() in t_orig.lower():
             return cn_std
 
-    # ④ 大模型兜底
     key = f"__FC3__{t_orig}"
     if key in _jp_cache:
         return _jp_cache[key]
@@ -191,12 +193,14 @@ def translate_fault_class(text: str) -> str:
     for cand in JP_FAULT_CN_LIST:
         if cand in result:
             _jp_cache[key] = cand
+            _save_jp_cache()
             return cand
 
     result = result[:12]
     if "未知" in result or "无法" in result:
         return ""
     _jp_cache[key] = result
+    _save_jp_cache()
     return result
 
 
@@ -222,6 +226,7 @@ def translate_process_result(complaint_jp: str, repair_jp: str) -> str:
     for fixed in PROCESS_RESULT_FIXED_JP:
         if fixed in result:
             _jp_cache[key] = fixed
+            _save_jp_cache()
             return fixed
     return ""
 
@@ -258,18 +263,25 @@ def normalize_date_jp(val) -> str:
 
 
 # ==================== 类别 ====================
-def determine_category_jp(solution: str, note: str = "") -> str:
+def determine_category_jp(solution: str, note: str = "", model: str = "") -> str:
     text = f"{solution} {note}".strip()
+
+    # ① DOA 优先（DOA 不改）
+    if "DOA" in text.upper():
+        return "维修（保内）"
+
+    # ② 老机型 → 保外
+    if is_old_model(model):
+        return "维修（保外）"
+
     if not text:
         return "待确认"
-    if "保内" in text:
-        return "保内"
-    if "DOA" in text.upper():
-        return "保内"
-    if "保外" in text:
-        return "保外"
+    if "维修（保内）" in text:
+        return "维修（保内）"
+    if "维修（保外）" in text:
+        return "维修（保外）"
     if "退款" in text or "退机" in text:
-        return "保外"
+        return "维修（保外）"
     if "其他" in text:
         return "其他"
     return "待确认"
@@ -278,7 +290,7 @@ def determine_category_jp(solution: str, note: str = "") -> str:
 # ==================== 工单状态 ====================
 def determine_status(arrival: str, done_flag: str) -> str:
     done = str(done_flag or "").strip()
-    if done in ("✔", "√", "Y", "y", "TRUE", "True"):
+    if done in ("✔", "√", "Y", "y", "TRUE", "True", "true"):
         return "已完成"
     arr = str(arrival or "").strip().upper()
     if arr == "Y":
@@ -311,7 +323,10 @@ def process_row_jp(row: pd.Series) -> dict:
         out["故障类型（一级）"] = fault_from_text(solution_text)
 
     out["处理方式"] = translate_process_result(fault_text, repair_text)
-    out["类别"] = determine_category_jp(solution_text, note_text)
+
+    out["类别"] = determine_category_jp(solution_text, note_text,
+                                        model=out.get("型号", ""))
+
     out["故障描述"] = jp_translate(fault_text) if not _is_blank(fault_text) else ""
 
     detail_parts = []
@@ -323,16 +338,20 @@ def process_row_jp(row: pd.Series) -> dict:
 
     send_back = str(out.get("寄回单号", "") or "").strip()
     send_out = str(out.get("发货单号", "") or "").strip()
-    out["物流单号"] = " / ".join([x for x in [send_back, send_out]
-                                  if x and x.lower() not in ("nan", "/", "-")])
+    out["物流单号"] = " / ".join(
+        [x for x in [send_back, send_out]
+         if x and x.lower() not in ("nan", "/", "-", "／")]
+    )
 
     arr = str(out.get("到货状态", "") or "").strip().upper()
     out["到货状态"] = "已到货" if arr == "Y" else "未到货"
 
     part = str(out.get("故障部件", "") or "").strip()
     pno = str(out.get("料号", "") or "").strip()
-    out["故障部件/料号"] = " / ".join([x for x in [part, pno]
-                                        if x and x.lower() not in ("nan", "/", "-")])
+    out["故障部件/料号"] = " / ".join(
+        [x for x in [part, pno]
+         if x and x.lower() not in ("nan", "/", "-", "／")]
+    )
 
     out["工单状态"] = determine_status(arr, out.get("完成标记", ""))
 
@@ -347,6 +366,14 @@ def process_row_jp(row: pd.Series) -> dict:
 def process_dataframe_jp(df, progress_cb=None,
                          on_row_done=None, stop_flag_getter=None):
     df = _normalize_df_columns(df)
+
+    # ===== 剔除 MOVA 工单（按工单号前缀）=====
+    if "RMA" in df.columns:
+        before = len(df)
+        df = df[~df["RMA"].astype(str).apply(is_mova_ticket)].copy()
+        removed = before - len(df)
+        if removed > 0:
+            print(f"[JP] 已剔除 MOVA 工单 {removed} 条")
 
     rows = []
     total = len(df)
