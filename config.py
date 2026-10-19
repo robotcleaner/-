@@ -21,7 +21,7 @@ FIXED_AGENT  = "PAU"
 # ===== 断点续跑相关 =====
 PARTIAL_RESULT_FILE = "partial_result.csv"
 
-# ===== 原始表 → 输出表 的列映射 =====
+# ===== 原始表 → 输出表 的列映射（10 月表头）=====
 COLUMN_MAP = {
     "Ticket Number":                            "工单号",
     "Serial Number":                            "SN",
@@ -29,16 +29,24 @@ COLUMN_MAP = {
     "Customer Complaint":                       "用户描述原文",
     "Ticket Type":                              "质保",
     "Type of Service":                          "Type of Service原值",
-    "Fault Classification 1 故障类别 1":        "Fault Classification 1 故障类别 1",
-    "Fault Classification 2 故障类别 2":        "Fault Classification 2 故障类别 2",
-    "Fault Classification 3 故障类别 3":        "Fault Classification 3 故障类别 3",
-    "Service Level 维修等级":                   "Service Level 维修等级",
-    "Repair Details 维修方案":                  "Repair Details 维修方案",
+
+    # 10 月表头：纯英文，无中文后缀
+    "Fault Classification 1":                   "Fault Classification 1",
+    "Fault Classification 2":                   "Fault Classification 2",
+    "Fault Classification 3":                   "Fault Classification 3",
+
+    "Service Level":                            "Service Level",
+    "Repair Start Date":                        "Repair Start Date",
+    "Repair Details":                           "Repair Details",
     "Repair Details (Technician Notes)":        "Repair Details (Technician Notes)",
-    "SKU consumption 备件使用":                 "SKU consumption 备件使用",
-    "Auxiliary Field：Closed Date":             "关单日期",
-    "Auxiliary Field：DOA Validation":          "DOA Validation",
-    "Auxiliary Field：Product Type":            "Product Type",
+    "SKU consumption":                          "SKU consumption",
+
+    # 10 月辅助字段：半角冒号 + 空格
+    "Auxiliary Field: Closed Date":             "关单日期",
+    "Auxiliary Field: DOA Validation":          "DOA Validation",
+    "Auxiliary Field: Product Type":            "Product Type",
+    "Auxiliary Field: Channel":                 "Channel",
+
     "Date Created":                             "创建日期",
     "Date Purchased":                           "购买日期",
 }

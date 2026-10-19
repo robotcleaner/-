@@ -100,6 +100,8 @@ def get_fault_cn(fault_en: str) -> str:
     key = str(fault_en).strip()
     if key in _fault_map:
         return _fault_map[key]
+    
+    # 字典里没有，才调大模型（且结果会存入字典，下次直接白嫖）
     cn = translate(key, task="fault_class")
     if cn:
         _fault_map[key] = cn
@@ -108,12 +110,6 @@ def get_fault_cn(fault_en: str) -> str:
 
 
 def fault_from_sku(sku_text: str) -> str:
-    """
-    从 SKU 消耗里推断故障类型。
-      ① 先按 SKU_TO_FAULT 关键词匹配
-      ② 匹配不上 → 调 DeepSeek 兜底
-      ③ 结果写回 fault_mapping.json
-    """
     if _is_blank(sku_text):
         return ""
     text = str(sku_text).strip()
@@ -142,9 +138,8 @@ def fault_from_sku(sku_text: str) -> str:
 def parse_date(val):
     if pd.isna(val) or val is None or str(val).strip() == "":
         return None
-    s = str(val).strip()
-    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%m/%d/%Y",
-                "%m/%d/%y", "%d/%m/%Y", "%Y%m%d"):
+    s = str(val).strip()[:10] # 截取前10位，过滤时间戳
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%d/%m/%Y", "%Y%m%d"):
         try:
             return datetime.strptime(s, fmt)
         except ValueError:
@@ -180,69 +175,48 @@ def extract_model(device_name: str) -> str:
 
 # ==================== NFF 判定 ====================
 NFF_KEYWORDS_NON_QUALITY = [
-    "买配件", "购买配件", "购买机器", "购买耗材", "买整机",
-    "补购", "加购",
-    "buy", "purchase",
-    "咨询产品", "询问产品", "问一下产品",
-    "如何使用产品", "怎么用产品",
-    "用户手册", "保修政策", "保修咨询",
-    "inquiry", "consult",
-    "无质量问题", "非质量问题", "仅备件", "仅咨询",
-    "仅购买", "非维修", "非故障",
-    "spare part only", "inquiry only", "purchase only",
-    "no quality issue",
+    "买配件", "购买配件", "购买机器", "购买耗材", "买整机", "补购", "加购",
+    "buy", "purchase", "咨询产品", "询问产品", "问一下产品",
+    "如何使用产品", "怎么用产品", "用户手册", "保修政策", "保修咨询",
+    "inquiry", "consult", "无质量问题", "非质量问题", "仅备件", "仅咨询",
+    "仅购买", "非维修", "非故障", "spare part only", "inquiry only", 
+    "purchase only", "no quality issue",
 ]
 
 
 def _has_nff_signal(text) -> bool:
-    if _is_blank(text):
-        return False
+    if _is_blank(text): return False
     t = str(text).upper()
     return "NFF" in t or "NO FAULT FOUND" in t
 
 
 def _has_non_quality_signal(text) -> bool:
-    if _is_blank(text):
-        return False
+    if _is_blank(text): return False
     t = str(text)
     for kw in NFF_KEYWORDS_NON_QUALITY:
-        if kw in t:
-            return True
+        if kw in t: return True
     return False
 
 
 def _decide_nff(fault3, repair_details, tech_notes, complaint) -> bool:
-    if _has_nff_signal(tech_notes):
-        return True
-    if not _is_blank(tech_notes):
-        return False
+    if _has_nff_signal(tech_notes): return True
+    if not _is_blank(tech_notes): return False
 
-    if _has_nff_signal(repair_details):
-        return True
-    if not _is_blank(repair_details):
-        return False
+    if _has_nff_signal(repair_details): return True
+    if not _is_blank(repair_details): return False
 
-    if _has_nff_signal(fault3):
-        return True
-    if not _is_blank(fault3):
-        return False
+    if _has_nff_signal(fault3): return True
+    if not _is_blank(fault3): return False
 
-    if _has_non_quality_signal(complaint):
-        return True
+    if _has_non_quality_signal(complaint): return True
 
     return False
 
 
 # ==================== 类别 ====================
-def determine_category(warranty_years: float,
-                       date_created,
-                       date_purchased,
-                       doa_validation: str,
-                       fault3: str,
-                       repair_details: str,
-                       tech_notes: str,
-                       complaint: str,
-                       recent_count: int) -> str:
+def determine_category(warranty_years: float, date_created, date_purchased,
+                       doa_validation: str, fault3: str, repair_details: str,
+                       tech_notes: str, complaint: str, recent_count: int) -> str:
     if date_created and date_purchased:
         days = (date_created - date_purchased).days
         limit = (warranty_years or DEFAULT_WARRANTY_YEARS) * 365
@@ -252,10 +226,8 @@ def determine_category(warranty_years: float,
     if str(doa_validation).strip().upper() == "DOA":
         return "DOA"
 
-    if recent_count >= 3:
-        return "多返"
-    if recent_count == 2:
-        return "二返"
+    if recent_count >= 3: return "多返"
+    if recent_count == 2: return "二返"
 
     if _decide_nff(fault3, repair_details, tech_notes, complaint):
         return "无异常（NFF）"
@@ -267,6 +239,7 @@ def determine_category(warranty_years: float,
 def process_row(row: pd.Series, sn_recent_count: dict) -> dict:
     out = {}
 
+    # 10 月表头映射
     for src, dst in COLUMN_MAP.items():
         out[dst] = row.get(src, "")
 
@@ -278,11 +251,11 @@ def process_row(row: pd.Series, sn_recent_count: dict) -> dict:
     out["日期"] = normalize_date(out.get("关单日期", ""))
     out["SN"] = out.get("SN", "")
 
-    # ---- H 故障类型（一级）----
-    fault3 = str(out.get("Fault Classification 3 故障类别 3", "") or "").strip()
-    sku_text = str(out.get("SKU consumption 备件使用", "") or "").strip()
+    fault3 = str(out.get("Fault Classification 3", "") or "").strip()
+    sku_text = str(out.get("SKU consumption", "") or "").strip()
     complaint_raw = str(out.get("用户描述原文", "") or "").strip()
 
+    # 故障类型（一级）判断
     if not _is_blank(fault3):
         out["故障类型（一级）"] = get_fault_cn(fault3)
     else:
@@ -290,25 +263,23 @@ def process_row(row: pd.Series, sn_recent_count: dict) -> dict:
         if sku_fault:
             out["故障类型（一级）"] = sku_fault
         elif not _is_blank(complaint_raw):
-            out["故障类型（一级）"] = translate(
-                complaint_raw, task="fault_from_complaint"
-            )
+            out["故障类型（一级）"] = translate(complaint_raw[:50], task="fault_from_complaint")
         else:
             out["故障类型（一级）"] = ""
 
-    # ---- I 处理方式 ----
+    # 处理方式判断
     raw_service = str(out.get("Type of Service原值", "") or "").strip().lower()
     if raw_service == "credit_claim":
         text = "\n".join([
             str(out.get("用户描述原文", "") or ""),
-            str(out.get("Repair Details 维修方案", "") or ""),
+            str(out.get("Repair Details", "") or ""),
             str(out.get("Repair Details (Technician Notes)", "") or ""),
         ])
         out["处理方式"] = classify_credit_claim(text)
     else:
         out["处理方式"] = PROCESS_METHOD_MAP.get(raw_service, "")
 
-    # ---- J 类别 ----
+    # 类别判断
     date_created = parse_date(out.get("创建日期", ""))
     date_purchased = parse_date(out.get("购买日期", ""))
     warranty_years = lookup_warranty_years(out["型号"])
@@ -317,7 +288,7 @@ def process_row(row: pd.Series, sn_recent_count: dict) -> dict:
     recent_count = sn_recent_count.get(sn, 1)
 
     tech_notes_str = str(out.get("Repair Details (Technician Notes)", "") or "")
-    repair_details_str = str(out.get("Repair Details 维修方案", "") or "")
+    repair_details_str = str(out.get("Repair Details", "") or "")
 
     out["类别"] = determine_category(
         warranty_years=warranty_years,
@@ -331,16 +302,19 @@ def process_row(row: pd.Series, sn_recent_count: dict) -> dict:
         recent_count=recent_count,
     )
 
-    # ---- K 故障描述 ----
+    # ---- K 故障描述（限制长度，省钱大法）----
+    # 只截取前 150 个字符去翻译，防止用户小作文烧钱
+    complaint_short = complaint_raw[:150] + "..." if len(complaint_raw) > 150 else complaint_raw
     out["故障描述"] = (
-        translate(complaint_raw, task="complaint")
+        translate(complaint_short, task="complaint")
         if not _is_blank(complaint_raw) else ""
     )
 
-    # ---- L 维修详情 ----
+    # ---- L 维修详情（限制长度，省钱大法）----
     tech = str(out.get("Repair Details (Technician Notes)", "") or "").strip()
+    tech_short = tech[:150] + "..." if len(tech) > 150 else tech
     out["维修详情"] = (
-        translate(tech, task="tech_notes")
+        translate(tech_short, task="tech_notes")
         if not _is_blank(tech) else ""
     )
 
@@ -352,8 +326,15 @@ def process_dataframe(df: pd.DataFrame,
                       progress_cb=None,
                       on_row_done=None,
                       stop_flag_getter=None) -> pd.DataFrame:
-    sn_recent_count = {}
+    
+    # 1. 过滤掉完全没数据的空行
+    df = df.dropna(how='all').copy()
+    
+    # 2. 过滤掉连工单号都没有的行（防止脏数据报错）
+    if "Ticket Number" in df.columns:
+        df = df[df["Ticket Number"].notna() & (df["Ticket Number"].astype(str).str.strip() != "")].copy()
 
+    sn_recent_count = {}
     from collections import defaultdict
     by_sn = defaultdict(list)
 
@@ -389,7 +370,8 @@ def process_dataframe(df: pd.DataFrame,
             rows.append(out)
             if on_row_done:
                 on_row_done(out)
-        except Exception:
+        except Exception as e:
+            print(f"单行报错跳过 [工单号: {row.get('Ticket Number', '')}]：", e)
             empty = {col: "" for col in OUTPUT_COLUMNS}
             empty["工单号"] = row.get("Ticket Number", "ERROR")
             rows.append(empty)
