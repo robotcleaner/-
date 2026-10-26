@@ -2,12 +2,13 @@
 .streamlit/secrets.toml
 .env
 *.env
+!.env.example
 
-# 运行时产生的缓存和中间文件
+# 运行时产生的缓存和中间文件（含真实工单文本 / SN）
 .cache.json
-fault_mapping_*.json
-partial_result_*.csv
-partial_result_*.xlsx
+fault_mapping*.json
+partial_result*.csv
+partial_result*.xlsx
 
 # Python
 __pycache__/
@@ -27,3 +28,8 @@ env/
 # Excel 输出（可选，如果不想上传）
 优化后工单.xlsx
 已处理部分.xlsx
+
+# 日志 / 临时文件
+*.log
+*.tmp
+~$*

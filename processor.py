@@ -102,25 +102,53 @@ _PURE_SKU_ITEMS = sorted(PURE_SKU_MAP.items(), key=lambda kv: len(kv[0]), revers
 _SKU_TO_FAULT_ITEMS = sorted(SKU_TO_FAULT.items(), key=lambda kv: len(kv[0]), reverse=True)
 
 # ==================== 质保表 ====================
+def _read_warranty_rows(path: Path):
+    """读取质保表原始行；兼容「真 CSV」与「扩展名被改成 .csv 的 Excel」。"""
+    # ① 先按文本 CSV 读
+    try:
+        with path.open("r", encoding="utf-8-sig") as f:
+            rows = [r for r in csv.reader(f) if any(str(c).strip() for c in r)]
+        if rows:
+            return rows
+    except (UnicodeDecodeError, OSError):
+        pass
+
+    # ② 兜底：按 Excel 读（部分文件的 .csv 实际是 xls 二进制）
+    try:
+        df = pd.read_excel(path)
+        return [[str(v) for v in r] for r in df.values.tolist()]
+    except Exception:
+        return []
+
+
 def load_warranty_table() -> dict:
     path = Path(WARRANTY_TABLE_FILE)
     table = {}
     if not path.exists():
         return table
+
     try:
-        with path.open("r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                model = (row.get("Model") or "").strip()
-                yr = (row.get("Warranty_Yr") or "").strip()
-                if not model:
-                    continue
-                try:
-                    table[model] = float(yr) if yr else DEFAULT_WARRANTY_YEARS
-                except ValueError:
-                    table[model] = DEFAULT_WARRANTY_YEARS
+        rows = _read_warranty_rows(path)
     except Exception:
-        return {}
+        return table
+
+    for row in rows:
+        cells = [str(c).strip() for c in row]
+        # 单列被逗号拼在一起的情况： "A1 Pro,3"
+        if len(cells) == 1 and "," in cells[0]:
+            cells = [c.strip() for c in cells[0].split(",", 1)]
+        if len(cells) < 2:
+            continue
+
+        model, yr = cells[0], cells[1]
+        if not model or model.lower() in ("model", "型号", "nan"):
+            continue
+        if yr.lower() in ("nan", "none"):
+            yr = ""
+        try:
+            table[model] = float(yr) if yr else DEFAULT_WARRANTY_YEARS
+        except ValueError:
+            table[model] = DEFAULT_WARRANTY_YEARS
     return table
 
 _warranty_table = load_warranty_table()
