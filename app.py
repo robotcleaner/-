@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from processor import process_dataframe as process_dataframe_au
-from config import OUTPUT_COLUMNS as OUTPUT_COLUMNS_AU
+from config import OUTPUT_COLUMNS as OUTPUT_COLUMNS_AU, MAX_WORKERS
 
 from processor_kr import process_dataframe_kr
 from config_kr import OUTPUT_COLUMNS_KR
@@ -76,6 +76,9 @@ else:
 
 st.info(f"当前区域：**{region}**，输出列数：{len(OUTPUT_COLUMNS)}")
 
+# 断点文件路径（各区域独立）
+partial_path = Path(PARTIAL_FILE)
+
 if "stop_flag" not in st.session_state:
     st.session_state.stop_flag = False
 if "processing" not in st.session_state:
@@ -91,7 +94,12 @@ with st.sidebar:
     5. 重新上传同一文件 → 点开始 → 自动跳过已处理
     """)
     st.divider()
-    st.caption("模型：硅基流动 DeepSeek-V3")
+    workers = st.slider(
+        "并发处理数", min_value=1, max_value=8, value=MAX_WORKERS,
+        help="翻译/分类为网络 IO 密集型任务，适当并发可数倍提速；"
+             "如遇接口限流报错，请调低并发数",
+    )
+    st.caption(f"模型：硅基流动 DeepSeek-V3（并发 {workers}）")
 
 # ========== 上传 ==========
 uploaded = st.file_uploader(
@@ -129,7 +137,7 @@ if uploaded is not None:
     # ========== 断点续跑 ==========
     if Path(PARTIAL_FILE).exists():
         try:
-            partial_df = pd.read_csv(PARTIAL_FILE, encoding="utf-8-sig")
+            partial_df = pd.read_csv(PARTIAL_FILE, encoding="utf-8-sig", on_bad_lines='skip')
             if OUTPUT_TICKET_COL in partial_df.columns:
                 done_ids = set(partial_df[OUTPUT_TICKET_COL].astype(str))
             else:
@@ -141,6 +149,31 @@ if uploaded is not None:
     else:
         partial_df = None
         done_ids = set()
+
+    # ========== 往批历史（用于 重复 / 二返 / 三返 判定）==========
+    # 断点文件里是已处理完的标准化行：其 SN + 日期 可作为"该 SN 之前
+    # 是否出现过"的历史依据；故障类型（一级）用于对比是否「重现」。
+    history_records = None
+    if partial_df is not None and len(partial_df) > 0:
+        try:
+            history_records = [
+                {
+                    "sn": r.get("SN", ""),
+                    "date": r.get("日期", ""),
+                    "desc": r.get("故障描述", ""),
+                    "detail": r.get("维修详情", ""),
+                    "fault": r.get("故障类型（一级）", ""),
+                }
+                for _, r in partial_df.iterrows()
+            ]
+            # 过滤空 SN / NaN（避免 "nan" 字符串被当成真实 SN 分组）
+            history_records = [
+                h for h in history_records
+                if str(h.get("sn") or "").strip()
+                and str(h.get("sn")).strip().lower() not in ("nan", "none", "nat")
+            ] or None
+        except Exception:
+            history_records = None
 
     col1, col2, col3 = st.columns([1, 1, 2])
 
@@ -190,10 +223,13 @@ if uploaded is not None:
         def on_row_done(out_dict):
             filtered = {col: out_dict.get(col, "") for col in OUTPUT_COLUMNS}
             df_one = pd.DataFrame([filtered])
+            # 表头仅在文件不存在或为空时写入，避免重复表头/错位
+            need_header = (not partial_path.exists()
+                           or partial_path.stat().st_size == 0)
             df_one.to_csv(
                 PARTIAL_FILE,
                 mode="a",
-                header=not Path(PARTIAL_FILE).exists(),
+                header=need_header,
                 index=False,
                 encoding="utf-8-sig",
             )
@@ -207,13 +243,15 @@ if uploaded is not None:
                 progress_cb=cb,
                 on_row_done=on_row_done,
                 stop_flag_getter=stop_getter,
+                max_workers=workers,
+                history_records=history_records,
             )
             st.session_state.processing = False
             progress_bar.progress(1.0)
             status_text.text("✅ 本次处理完成")
 
             if Path(PARTIAL_FILE).exists():
-                all_df = pd.read_csv(PARTIAL_FILE, encoding="utf-8-sig")
+                all_df = pd.read_csv(PARTIAL_FILE, encoding="utf-8-sig", on_bad_lines='skip')
                 all_df = all_df[[c for c in OUTPUT_COLUMNS if c in all_df.columns]]
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine="openpyxl") as writer:

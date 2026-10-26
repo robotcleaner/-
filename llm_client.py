@@ -1,13 +1,14 @@
 import hashlib
-import json
-from pathlib import Path
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
+
 from config import (
     SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,
     MODEL_TRANSLATE, MODEL_CLASSIFY,
     TEMPERATURE, MAX_TOKENS, TIMEOUT, MAX_RETRY,
 )
+from prompts import PROMPTS
+from batch import JsonStore
 
 client = OpenAI(
     api_key=SILICONFLOW_API_KEY,
@@ -15,13 +16,14 @@ client = OpenAI(
     timeout=TIMEOUT,
 )
 
-CACHE_FILE = Path(".cache.json")
-_cache = {}
-if CACHE_FILE.exists():
-    try:
-        _cache = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        _cache = {}
+# ==================== 磁盘缓存 ====================
+# 旧实现：每新增一条翻译就全量重写 .cache.json（已 1MB+），缓存越大越慢，
+# 累积磁盘 IO 呈 O(N^2)。现由 JsonStore 防抖落盘：
+#   - 写入只进内存（加锁，多线程安全）；
+#   - 累计 10 条新条目或每隔 10 秒由后台线程落盘一次；
+#   - atexit 保证进程退出前最终落盘。
+CACHE_FILE = ".cache.json"
+_cache = JsonStore(CACHE_FILE)
 
 
 def _cache_key(text: str, task: str) -> str:
@@ -29,10 +31,13 @@ def _cache_key(text: str, task: str) -> str:
 
 
 def _save_cache():
-    CACHE_FILE.write_text(
-        json.dumps(_cache, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    """兼容旧接口：立即全量落盘（一般无需调用，JsonStore 会自动落盘）。"""
+    _cache.flush(force=True)
+
+
+def flush_cache():
+    """立即落盘缓存（若有脏数据）。"""
+    _cache.flush()
 
 
 def _is_empty(text) -> bool:
@@ -65,41 +70,38 @@ def translate(text: str, task: str = "translate") -> str:
     if key in _cache:
         return _cache[key]
 
-    from prompts import PROMPTS
     prompt = PROMPTS[task].format(text=text)
     result = _call_llm(prompt, MODEL_TRANSLATE)
 
     if not result or len(result) > 2000:
-        return ""
+        result = ""
     if "无法翻译" in result or "请提供" in result:
-        return ""
+        result = ""
 
+    # 含空结果一起缓存：避免同一段异常文本反复付费调用
     _cache[key] = result
-    _save_cache()
     return result
 
 
 def classify_fault_from_sku(sku_text: str) -> str:
-    """从备件 SKU 推断故障类型（LLM 兜底，不写缓存，由 processor 写）"""
+    """从备件 SKU 推断故障类型（LLM 兜底，缓存由 JsonStore 统一管理）"""
     if _is_empty(sku_text):
         return ""
     key = _cache_key(sku_text, "fault_from_sku")
     if key in _cache:
         return _cache[key]
 
-    from prompts import PROMPTS
     prompt = PROMPTS["fault_from_sku"].format(text=str(sku_text)[:2000])
     result = _call_llm(prompt, MODEL_CLASSIFY)
 
     if not result or len(result) > 30:
-        return ""
+        result = ""
     # 只保留前 12 个字符，避免模型话多
     result = result.replace("【", "").replace("】", "").strip()[:12]
     if "未知" in result or "无法" in result:
-        return ""
+        result = ""
 
     _cache[key] = result
-    _save_cache()
     return result
 
 
@@ -111,7 +113,6 @@ def classify_credit_claim(text: str) -> str:
     if key in _cache:
         return _cache[key]
 
-    from prompts import PROMPTS
     prompt = PROMPTS["credit_claim"].format(text=str(text)[:2000])
     result = _call_llm(prompt, MODEL_CLASSIFY)
     result = result.replace("【", "").replace("】", "").strip()
@@ -124,5 +125,4 @@ def classify_credit_claim(text: str) -> str:
         result = "更换备件/配件"
 
     _cache[key] = result
-    _save_cache()
     return result

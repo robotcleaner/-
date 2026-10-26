@@ -2,6 +2,7 @@
 import io
 import json
 import re
+import threading
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -14,9 +15,12 @@ from config_jp import (
     JP_PROMPT_FAULT_FROM_TEXT,
     JP_PROMPT_PROCESS_RESULT,
 )
-from config import PRODUCT_BU_MAP
+from config import PRODUCT_BU_MAP, MAX_WORKERS
 from config_common import is_mova_ticket, is_old_model
 from llm_client import _call_llm, MODEL_TRANSLATE, MODEL_CLASSIFY
+from batch import JsonStore, run_batch
+from model_norm import normalize_model
+from repeat import RepeatClassifier, apply_label
 
 
 # ==================== 加载官方故障对照表 ====================
@@ -115,19 +119,13 @@ def _normalize_jp_text(text: str) -> str:
 
 # ==================== 本地缓存 ====================
 JP_CACHE_FILE = "fault_mapping_jp.json"
-_jp_cache = {}
-if Path(JP_CACHE_FILE).exists():
-    try:
-        _jp_cache = json.loads(Path(JP_CACHE_FILE).read_text(encoding="utf-8"))
-    except Exception:
-        _jp_cache = {}
+# JsonStore：线程安全 + 防抖落盘（旧实现每新增一条就全量重写整个文件）
+_jp_cache = JsonStore(JP_CACHE_FILE)
 
 
 def _save_jp_cache():
-    Path(JP_CACHE_FILE).write_text(
-        json.dumps(_jp_cache, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    """兼容旧接口：立即落盘（一般无需调用，JsonStore 会自动落盘）。"""
+    _jp_cache.flush(force=True)
 
 
 # ==================== 日译中 ====================
@@ -306,6 +304,7 @@ def process_row_jp(row: pd.Series) -> dict:
 
     out["区域"] = FIXED_REGION_JP
     out["代理"] = FIXED_AGENT_JP
+    out["型号"] = normalize_model(out.get("型号", ""))
     out["产品BU"] = get_product_bu(out.get("型号", ""))
     out["日期"] = normalize_date_jp(out.get("日期", ""))
 
@@ -363,8 +362,19 @@ def process_row_jp(row: pd.Series) -> dict:
 
 
 # ==================== 批量处理 ====================
+# ==================== 返修判定使用的原始列 ====================
+_REPEAT_COLS_JP = {
+    "sn": "SN",
+    "date": "発生日時/登记时间",
+    "desc": "クレーム症状/客诉症状",
+    "detail": "メンテナンス|改修维修|翻新情况",
+}
+
+
 def process_dataframe_jp(df, progress_cb=None,
-                         on_row_done=None, stop_flag_getter=None):
+                         on_row_done=None, stop_flag_getter=None,
+                         max_workers: int = MAX_WORKERS,
+                         history_records=None):
     df = _normalize_df_columns(df)
 
     # ===== 剔除 MOVA 工单（按工单号前缀）=====
@@ -375,25 +385,42 @@ def process_dataframe_jp(df, progress_cb=None,
         if removed > 0:
             print(f"[JP] 已剔除 MOVA 工单 {removed} 条")
 
-    rows = []
-    total = len(df)
-    for i, (_, row) in enumerate(df.iterrows()):
-        if stop_flag_getter and stop_flag_getter():
-            break
+    # ===== 返修分类预扫描（重复 / 二返 / 三返）=====
+    rows_snapshot = list(df.iterrows())
+    records = [
+        {"pos": pos,
+         "sn": _get_col(row, _REPEAT_COLS_JP["sn"]),
+         "date": _get_col(row, _REPEAT_COLS_JP["date"]),
+         "desc": _get_col(row, _REPEAT_COLS_JP["desc"]),
+         "detail": _get_col(row, _REPEAT_COLS_JP["detail"])}
+        for pos, (_, row) in enumerate(rows_snapshot)
+    ]
+    repeat_plan = RepeatClassifier(history=history_records).build_plan(records)
+
+    completed_faults = {}
+    _cf_lock = threading.Lock()
+
+    def handle_row(pos, row):
         try:
             out = process_row_jp(row)
-            rows.append(out)
-            if on_row_done:
-                on_row_done(out)
-        except Exception as e:
+        except Exception:
             empty = {col: "" for col in OUTPUT_COLUMNS_JP}
             empty["工单号"] = _get_col(row, "RMA") or "ERROR"
-            empty["唯一键"] = f"ERROR__{i}"
-            rows.append(empty)
-            if on_row_done:
-                on_row_done(empty)
-        if progress_cb:
-            progress_cb(i + 1, total)
+            empty["唯一键"] = f"ERROR__{pos}"
+            out = empty
+
+        apply_label(out, pos, repeat_plan, rows_snapshot,
+                    process_row_jp, fault_getter=lambda p: (
+                        completed_faults.get(p) if p is not None else None))
+
+        with _cf_lock:
+            completed_faults[pos] = str(
+                out.get("故障类型（一级）", "") or "").strip()
+        return out
+
+    rows = run_batch(df, handle_row, max_workers=max_workers,
+                     progress_cb=progress_cb, on_row_done=on_row_done,
+                     stop_flag_getter=stop_flag_getter)
 
     result = pd.DataFrame(rows)
     for col in OUTPUT_COLUMNS_JP:

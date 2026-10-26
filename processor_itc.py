@@ -1,6 +1,7 @@
 # processor_itc.py
 import io
 import json
+import threading
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -13,9 +14,12 @@ from config_itc import (
     JP_PROMPT_FAULT_FROM_TEXT_ITC,
     JP_PROMPT_PROCESS_RESULT_ITC,
 )
-from config import PRODUCT_BU_MAP
+from config import PRODUCT_BU_MAP, MAX_WORKERS
 from config_common import is_mova_ticket, is_old_model
 from llm_client import _call_llm, MODEL_TRANSLATE, MODEL_CLASSIFY
+from batch import JsonStore, run_batch
+from model_norm import normalize_model
+from repeat import RepeatClassifier, apply_label
 
 try:
     from config_kr import KR_TO_CN_FAULT
@@ -84,19 +88,13 @@ def _get_col(row, name):
 
 # ==================== 本地缓存 ====================
 ITC_CACHE_FILE = "fault_mapping_itc.json"
-_itc_cache = {}
-if Path(ITC_CACHE_FILE).exists():
-    try:
-        _itc_cache = json.loads(Path(ITC_CACHE_FILE).read_text(encoding="utf-8"))
-    except Exception:
-        _itc_cache = {}
+# JsonStore：线程安全 + 防抖落盘（旧实现每新增一条就全量重写整个文件）
+_itc_cache = JsonStore(ITC_CACHE_FILE)
 
 
 def _save_itc_cache():
-    Path(ITC_CACHE_FILE).write_text(
-        json.dumps(_itc_cache, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    """兼容旧接口：立即落盘（一般无需调用，JsonStore 会自动落盘）。"""
+    _itc_cache.flush(force=True)
 
 
 # ==================== 日译中 ====================
@@ -246,11 +244,7 @@ def determine_category_itc(warranty: str,
     if is_old_model(model):
         return "维修（保外）"
 
-    # ⑤ 二返 / 多返
-    if repair_count >= 3:
-        return "多返"
-    if repair_count == 2:
-        return "二返"
+    # ⑤ 二返 / 多返 —— 已由 repeat.RepeatClassifier 统一判定（见 process_dataframe_itc）
 
     # ⑥ 默认保内
     return "维修（保内）"
@@ -279,9 +273,12 @@ def process_row_itc(row: pd.Series) -> dict:
     out["工单号"] = out.get("工单号", "")
     out["区域"] = FIXED_REGION_ITC
     out["代理"] = FIXED_AGENT_ITC
-    out["型号"] = out.get("型号", "")
+    # 型号（统一为澳洲工单格式）
+    out["型号"] = normalize_model(out.get("型号", ""))
     out["产品BU"] = get_product_bu(out.get("型号", ""))
-    out["日期"] = normalize_date_jp(out.get("处理日", ""))
+    # 日期：优先发货时间（出荷日），为空时兜底建单/登记时间
+    out["日期"] = (normalize_date_jp(out.get("发货时间", ""))
+                  or normalize_date_jp(out.get("登记时间", "")))
     out["SN"] = out.get("SN", "")
 
     fault_text = str(out.get("用户描述日文", "") or "").strip()
@@ -355,8 +352,28 @@ def process_row_itc(row: pd.Series) -> dict:
 
 
 # ==================== 批量处理 ====================
+# ==================== 返修判定使用的原始列 ====================
+_REPEAT_COLS_ITC = {
+    "sn": "SN",
+    "date": "出荷日",                     # 发货时间（主来源）
+    "date_fallback": "発生日時登记时间",  # 建单/登记时间（发货时间为空时兜底）
+    "desc": "クレーム症状客诉症状",
+    "detail": "点检结果",
+}
+
+
+def _itc_row_date(row):
+    """返修判定用日期：优先发货时间，为空兜底建单/登记时间。"""
+    d = _get_col(row, _REPEAT_COLS_ITC["date"])
+    if _is_blank(d):
+        d = _get_col(row, _REPEAT_COLS_ITC["date_fallback"])
+    return d
+
+
 def process_dataframe_itc(df, progress_cb=None,
-                          on_row_done=None, stop_flag_getter=None):
+                          on_row_done=None, stop_flag_getter=None,
+                          max_workers: int = MAX_WORKERS,
+                          history_records=None):
     df = _normalize_df_columns(df)
 
     # ===== 剔除 MOVA 工单（按工单号前缀）=====
@@ -367,25 +384,42 @@ def process_dataframe_itc(df, progress_cb=None,
         if removed > 0:
             print(f"[ITC] 已剔除 MOVA 工单 {removed} 条")
 
-    rows = []
-    total = len(df)
-    for i, (_, row) in enumerate(df.iterrows()):
-        if stop_flag_getter and stop_flag_getter():
-            break
+    # ===== 返修分类预扫描（重复 / 二返 / 三返）=====
+    rows_snapshot = list(df.iterrows())
+    records = [
+        {"pos": pos,
+         "sn": _get_col(row, _REPEAT_COLS_ITC["sn"]),
+         "date": _itc_row_date(row),
+         "desc": _get_col(row, _REPEAT_COLS_ITC["desc"]),
+         "detail": _get_col(row, _REPEAT_COLS_ITC["detail"])}
+        for pos, (_, row) in enumerate(rows_snapshot)
+    ]
+    repeat_plan = RepeatClassifier(history=history_records).build_plan(records)
+
+    completed_faults = {}
+    _cf_lock = threading.Lock()
+
+    def handle_row(pos, row):
         try:
             out = process_row_itc(row)
-            rows.append(out)
-            if on_row_done:
-                on_row_done(out)
         except Exception:
             empty = {col: "" for col in OUTPUT_COLUMNS_ITC}
-            empty["工单号"] = row.get("RMA", "ERROR")
-            empty["唯一键"] = f"ERROR__{i}"
-            rows.append(empty)
-            if on_row_done:
-                on_row_done(empty)
-        if progress_cb:
-            progress_cb(i + 1, total)
+            empty["工单号"] = _get_col(row, "RMA") or "ERROR"
+            empty["唯一键"] = f"ERROR__{pos}"
+            out = empty
+
+        apply_label(out, pos, repeat_plan, rows_snapshot,
+                    process_row_itc, fault_getter=lambda p: (
+                        completed_faults.get(p) if p is not None else None))
+
+        with _cf_lock:
+            completed_faults[pos] = str(
+                out.get("故障类型（一级）", "") or "").strip()
+        return out
+
+    rows = run_batch(df, handle_row, max_workers=max_workers,
+                     progress_cb=progress_cb, on_row_done=on_row_done,
+                     stop_flag_getter=stop_flag_getter)
 
     result = pd.DataFrame(rows)
     for col in OUTPUT_COLUMNS_ITC:

@@ -1,5 +1,6 @@
 import io
 import json
+import threading
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -11,9 +12,12 @@ from config_kolon import (
     KR_PROMPT_FAULT_FROM_TEXT_KOLON,
     KR_PROMPT_PROCESS_RESULT_KOLON,
 )
-from config import PRODUCT_BU_MAP
+from config import PRODUCT_BU_MAP, MAX_WORKERS
 from config_kr import KR_TO_CN_FAULT
 from llm_client import _call_llm, MODEL_TRANSLATE, MODEL_CLASSIFY
+from batch import JsonStore, run_batch
+from model_norm import normalize_model
+from repeat import RepeatClassifier, apply_label
 
 
 # ==================== 工具 ====================
@@ -66,19 +70,13 @@ def _normalize_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 # ==================== 本地缓存 ====================
 KOLON_CACHE_FILE = "fault_mapping_kolon.json"
-_kolon_cache = {}
-if Path(KOLON_CACHE_FILE).exists():
-    try:
-        _kolon_cache = json.loads(Path(KOLON_CACHE_FILE).read_text(encoding="utf-8"))
-    except Exception:
-        _kolon_cache = {}
+# JsonStore：线程安全 + 防抖落盘（旧实现每新增一条就全量重写整个文件）
+_kolon_cache = JsonStore(KOLON_CACHE_FILE)
 
 
 def _save_kolon_cache():
-    Path(KOLON_CACHE_FILE).write_text(
-        json.dumps(_kolon_cache, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    """兼容旧接口：立即落盘（一般无需调用，JsonStore 会自动落盘）。"""
+    _kolon_cache.flush(force=True)
 
 
 # ==================== 韩译中 ====================
@@ -223,11 +221,7 @@ def determine_category_kolon(warranty: str,
         if kw in text_all or kw in text_orig:
             return "无异常（NFF）"
 
-    # ④ 二返 / 多返
-    if repair_count >= 3:
-        return "多返"
-    if repair_count == 2:
-        return "二返"
+    # ④ 二返 / 多返 —— 已由 repeat.RepeatClassifier 统一判定（见 process_dataframe_kolon）
 
     # ⑤ 默认保内
     return "维修（保内）"
@@ -243,7 +237,7 @@ def process_row_kolon(row: pd.Series) -> dict:
     out["工单号"] = out.get("工单号", "")
     out["区域"] = FIXED_REGION_KOLON
     out["代理"] = FIXED_AGENT_KOLON
-    out["型号"] = out.get("型号", "")
+    out["型号"] = normalize_model(out.get("型号", ""))
     out["产品BU"] = get_product_bu(out.get("型号", ""))
     out["日期"] = normalize_date_kr(out.get("处理日", ""))
     out["SN"] = out.get("SN", "")
@@ -285,29 +279,57 @@ def process_row_kolon(row: pd.Series) -> dict:
 
 
 # ==================== 批量处理 ====================
+# ==================== 返修判定使用的原始列 ====================
+_REPEAT_COLS_KOLON = {
+    "sn": "제조번호",
+    "date": "처리일",
+    "desc": "고장상세",
+    "detail": "처리내용",
+}
+
+
 def process_dataframe_kolon(df, progress_cb=None,
-                            on_row_done=None, stop_flag_getter=None):
+                            on_row_done=None, stop_flag_getter=None,
+                            max_workers: int = MAX_WORKERS,
+                            history_records=None):
     # 列名归一化
     df = _normalize_df_columns(df)
 
-    rows = []
-    total = len(df)
-    for i, (_, row) in enumerate(df.iterrows()):
-        if stop_flag_getter and stop_flag_getter():
-            break
+    # ===== 返修分类预扫描（重复 / 二返 / 三返）=====
+    rows_snapshot = list(df.iterrows())
+    records = [
+        {"pos": pos,
+         "sn": row.get(_REPEAT_COLS_KOLON["sn"], ""),
+         "date": row.get(_REPEAT_COLS_KOLON["date"], ""),
+         "desc": row.get(_REPEAT_COLS_KOLON["desc"], ""),
+         "detail": row.get(_REPEAT_COLS_KOLON["detail"], "")}
+        for pos, (_, row) in enumerate(rows_snapshot)
+    ]
+    repeat_plan = RepeatClassifier(history=history_records).build_plan(records)
+
+    completed_faults = {}
+    _cf_lock = threading.Lock()
+
+    def handle_row(pos, row):
         try:
             out = process_row_kolon(row)
-            rows.append(out)
-            if on_row_done:
-                on_row_done(out)
         except Exception:
             empty = {col: "" for col in OUTPUT_COLUMNS_KOLON}
             empty["工单号"] = row.get("접수번호", "ERROR")
-            rows.append(empty)
-            if on_row_done:
-                on_row_done(empty)
-        if progress_cb:
-            progress_cb(i + 1, total)
+            out = empty
+
+        apply_label(out, pos, repeat_plan, rows_snapshot,
+                    process_row_kolon, fault_getter=lambda p: (
+                        completed_faults.get(p) if p is not None else None))
+
+        with _cf_lock:
+            completed_faults[pos] = str(
+                out.get("故障类型（一级）", "") or "").strip()
+        return out
+
+    rows = run_batch(df, handle_row, max_workers=max_workers,
+                     progress_cb=progress_cb, on_row_done=on_row_done,
+                     stop_flag_getter=stop_flag_getter)
 
     result = pd.DataFrame(rows)
     for col in OUTPUT_COLUMNS_KOLON:

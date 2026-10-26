@@ -1,19 +1,198 @@
-﻿工单号,区域,代理,型号,产品BU,日期,SN,故障类型（一级）,处理方式,类别,故障描述,维修详情
-0EQ3BOVLJX4,澳洲,PAU,L40 Ultra CE,扫地机,,R2562G57DAU1179533,无法清洗,更换备件/配件,维修（保内）,简单问题描述：进入刷洗程序时机器卡住并发出嗡嗡声，重置底座电源后恢复正常。,"预检备注：故障  
+﻿工单号,区域,代理,型号,产品BU,日期,SN,故障类型（一级）,处理方式,类别,故障描述,维修详情,备件消耗
+09K4VYBM2,澳洲,PAU,L40s Ultra,扫地机,2026/09/23,R2551G589AU05-1-1,拖布电机不良,更换备件/配件,维修（保内）,设备无法充电，原因是拖布盘处于伸出状态，归位时无法收回机器人内部。,,
+0EA09DG8X7P,澳洲,PAU,L40 Ultra CE,扫地机,2026/09/01,r5021g649au01796a6,其他问题(replacement ord...),更换整机,维修（保内）,更换订单,,
+0EA3KNB0LDA,澳洲,PAU,L10s Pro Ultra Heat,扫地机,2026/09/02,R2338G51GAU0069833,基站充电组件不良,更换备件/配件,维修（保外）,机器人无法自行返回基站，存在充电与对接问题。,,
+0EANY6JVQL2,澳洲,PAU,D20 Pro Plus,扫地机,2026/09/01,R2566Q5CKAU0248A6,LDS组件不良,更换整机,维修（保内）,设备报激光距离传感器错误。客户仅在一周前开箱使用。,,
+0EAXGG2NNKP,澳洲,PAU,Z30 Station,吸尘器,2026/09/01,202605090309,多功能刷不良,补发配件,维修（保内）,刷头损坏,,20020100012634 - Smart Illumination Multi-Brush（No roller brush） Quantity: 1
+0EQ6A1KEB32,澳洲,PAU,G10 W&D Vacuum,洗地机,2026/09/29,250-5430390-1411844,吸力弱,更换备件/配件,维修（保内）,地板洗地机底座有漏水积水现象，通风口处也有漏水。,"译文：
+预检备注：过滤器/电机
+诊断备注：电机
+复检备注：设备已维修并测试",20020100020917 - Main Motor
+0EQ6E6PZJ6K,澳洲,PAU,L10s Ultra Gen2,扫地机,2026/09/16,R2469G573AU5556901,滤网不良,补发配件,无异常（NFF）,客户想购买一个过滤器,,20010100001065 - Filter Quantity: 2
+0EQ6OER70O4,澳洲,PAU,L40S Pro Ultra,扫地机,2026/09/15,R9419Q58CAU0301433,尘盒不良,更换备件/配件,维修（保内）,机器人吸尘器未清扫所有已规划区域，且试图在地板上自行清空尘盒，未返回基座进行尘盒清空。,"诊断备注：损坏  
+检查后备注：设备已测试并通过  
+更换集尘盒",20020100015032 - Dust box assembly
+0EQ6OJ6WMMG,澳洲,PAU,L10s Pro Ultra Heat,扫地机,2026/09/24,R2338G44CAU5180401-1,尘盒不良,更换备件/配件,维修（保外）,基座和机器人的对接部位有刮擦和污渍痕迹,"诊断备注：磨损  
+诊断备注：磨损  
+诊断备注：磨损  
+诊断备注：磨损  
+诊断备注：磨损  
+检后备注...","20010100000796 - Main Brush Cover
+20020100008211 - Dust Box Assembly(No Hepa)
+20010100000878 - Main Brush (Rubber)
+20020100007534 - Washboard Assembly(White)
+20020100007530 - Station Extension (WT)"
+0EQ6WZ4YBE4,澳洲,PAU,X60 Ultra,扫地机,2026/09/21,R5089Q641AU0524833,未发现故障,退货,维修（保内）,X60 Ultra对木地板造成大面积损坏,预检备注：主刷盖错位,
+0EQ8B1Q5PDK,澳洲,PAU,Aqua10 Ultra Track S,扫地机,2026/09/03,R2527Q58BAU0098933,电池包不良,更换备件/配件,无异常（NFF）,内部错误信息,"预检备注：电池问题  
+检后备注：未发现故障单元，已更新固件",
+0EQ8REDK6OE,澳洲,PAU,Aqua10 Ultra Track S,扫地机,2026/09/03,R2527Q58BAU0153833,基站水泵板不良,更换备件/配件,维修（保内）,洗涤剂槽未被识别为已安装，未使用洗涤剂清洁拖布，机器人自清洁功能异常，基站与机器人发霉且有异味。,"预检备注：故障  
 诊断备注：故障  
 诊断备注：故障  
 诊断备注：故障  
-复检备注：设备已修复……"
-0EQ4EZW2MZD,澳洲,PAU,L10s Plus,扫地机,,R2363G45PAU6182201,不出水,更换备件/配件,维修（保外）,机器人未将水释放到垫片上,"诊断备注：  
-检查后备注：设备已通过测试"
-0EQ6V5ZWEGD,澳洲,PAU,L10s Ultra Gen2,扫地机,,R2469G573AU5527101,水位异常,更换备件/配件,维修（保内）,洗涤板水位异常,"诊断备注：故障  
+复检备注：设备测试通过...","20020100020789 - Base station base support filter
+20020100017250 - Dust Collection Bag
+20020100020753 - Main engine sump tank"
+0EQ8VYBBO0A,澳洲,PAU,L50 Ultra,扫地机,2026/09/08,R9493G58JAU0081333,基站充电组件不良,更换整机,维修（保内）,"机器人无法正确回充对接基站。  
+机器人报错拖布未安装，但实际已正确安装。",,
+0EQ8W4XYOX4,澳洲,PAU,Aqua10 Ultra Roller,扫地机,2026/09/18,R9535Q58SAU0835333,核心板不良,更换备件/配件,维修（保内）,我们的机器又出问题了，这次是吸尘器无法缩回基座充电。吸尘机器人试图退回基座时...,"预检备注：故障  
 诊断备注：故障  
-检查后备注：设备已测试并通过更换零件"
-0EQAAMVD36M,澳洲,PAU,L30 Ultra S,扫地机,,R2584G545AU5207101-1,无法联网,更换备件/配件,维修（保外）,无法连接WiFi,"诊断备注：因过滤器状态不良已更换  
-检修后备注：设备已修复并测试，更换过滤器并降低了..."
-0EQAJZ5QDJK,澳洲,PAU,L20 Ultra,扫地机,,R2253G3ARAU0035001,无法回充,更换备件/配件,维修（保外）,机器人无法稳定返回并停靠基站，需手动辅助才能完成停靠。即使成功停靠后，仍频繁脱离基站。,"诊断备注：车轮、LDS及电池更换  
-诊断备注：车轮、LDS及电池更换  
-诊断备注：车轮、LDS及电池更..."
-0EQAKW33PVM,澳洲,PAU,L40 Ultra AE,扫地机,,R2579Q648AU07317A6,自动关机,更换备件/配件,维修（保内）,机器人静置一夜后会显示“离线”，客户需重新连接或重置Wi-Fi。,"诊断备注：损坏  
-诊断备注：LDS弹簧故障  
-检修后备注：设备已维修并测试，更换了LDS盖、电池……"
+复检备注：设备通过，已更换充电组件",20020100023143 - Robot Rear Recharging Sensor Assembly
+0EQ9MOLQOB4,澳洲,PAU,Aqua10 Ultra Roller,扫地机,2026/09/15,R9535Q59JAU0494133,拖布电机不良,更换备件/配件,维修（保内）,"左轮移动时阻力过大，导致整机无法运行。
+
+拖把无法使用沸水清洗。","预检备注：RAG电机异响  
+诊断备注：电路板故障  
+诊断备注：电路板故障  
+诊断备注：无热水  
+诊断备注：无热...","20020100023183 - Station Power PCB
+20020100023123 - Station Main Board (或 Station Main PCB)
+20020100025529 - Station chassis bracket assembly（BLK）
+20020100023182 - Station PTC Hot Air Assembly
+20020100024612 - Robot LH Main Wheel Assembly"
+0EQARNVXDAK,澳洲,PAU,Aqua10 Ultra Roller,扫地机,2026/09/29,R9535Q59JAU0482533,驱动轮不良,更换备件/配件,维修（保内）,客户反映机器人存在以下问题：地图构建不准确、无法返回充电座，且运行中会出现类似卡住的半周期现象。机器人似乎无法...,"检查前备注：左侧轮不工作  
+诊断备注：yf  
+检查后备注：设备已修复。更换了左侧轮。",20020100024612 - Robot LH Main Wheel Assembly
+0EQB1VJOJJX,澳洲,PAU,Aqua10 Ultra Track S,扫地机,2026/09/30,R2527Q5BBAU0584833,拖布不良,补发配件,维修（保内）,清洁时拖布垫脱落。,,20010100001865 - Mop Pad Quantity: 1
+0EQD3WWW6LK,澳洲,PAU,X50 Ultra,扫地机,2026/09/17,R2489Q57GAU0892833R2,水位异常,更换备件/配件,维修（保内）,洗衣机反复提示“水位异常”，故障排除后仍会再次出现。,,
+0EQDBEW0NJD,澳洲,PAU,L40s Ultra,扫地机,2026/09/25,wait for  itttt,LDS组件不良,更换备件/配件,维修（保内）,"无法从木地板过渡到地毯的小坡度 - 参见视频
+
+无法从充电座移开 - 参见视频
+
+要求定制...","预检备注：故障  
+诊断备注：故障  
+诊断备注：故障  
+复检备注：测试通过，已更换LDS和主板","20020100019036 - Motherboard and camera assembly-AU
+20020100016452 - LDS  assembly"
+0EQDM3NYO4A,澳洲,PAU,X50 Ultra,扫地机,2026/09/25,r2489q53qau0693533,LDS组件不良,更换备件/配件,维修（保外）,设备报错“清洁传感器”。客户已清洁传感器，但设备仍显示该错误，且已进行复位操作。此外还出现……,"预检备注：故障  
+诊断备注：故障  
+复检备注：设备通过测试。",20020100014005 - LDS assembly（BLK）
+0EQEVBBWMZP,澳洲,PAU,L40S Pro Ultra,扫地机,2026/09/01,R9419Q598AU00586A6,电池包不良,退货,维修（保内）,"* 设备无法正确找到底座，无法归位清空尘盒及充电。
+* 清洁过程中停止并提示拖布缺失，但拖布仍安装在设备上。",,
+0EQJ0ANZEYD,澳洲,PAU,X50 Ultra,扫地机,2026/09/16,R2489Q53QAU0747633,电池包不良,更换备件/配件,维修（保内）,基站有电，但机器人完全无响应。放入基站后无法开机或充电。,"诊断备注：需更换电池  
+检修后备注：设备已维修并测试，已更换电池",20020100010772 - Battery
+0EQJGVQ5BWX,澳洲,PAU,X40 Ultra,扫地机,2026/09/08,3349R01023R2416GAU-1,机器故障,更换整机,维修（保外）,机器故障。,,
+0EQJMOD7B1A,澳洲,PAU,L10s Pro Ultra Heat,扫地机,2026/09/21,R2338G44CAU5181901,驱动轮不良,更换备件/配件,维修（保外）,驱动轮损坏/卡住。,"诊断备注：已损坏  
+诊断备注：轮子故障  
+检查后备注：设备通过更换左轮测试","20010100000878 - Main Brush (Rubber)
+20020100007976 - Left Main Wheel Assembly"
+0EQJXVABP52,澳洲,PAU,Z30 Station,吸尘器,2026/09/18,V24068S1PGYA,通用刷组件不良,补发配件,维修（保内）,仅更换零件,,20020100030083 - Universal brush assembly Quantity: 1
+0EQM01VNPKG,澳洲,PAU,L30 Ultra S,扫地机,2026/09/04,R2584G55FAU5120701,电池包不良,更换备件/配件,维修（保内）,设备显示即将启动但随即关机，提示无电量并进入满充状态，但之后仍无电池续航。,"诊断备注：故障  
+诊断备注：故障  
+诊断备注：故障  
+检修后备注：设备已维修并测试，更换备用电...","20020100011667 - Power Cord (AU)
+20020100010934 - spare part battery for robotic vacuum cleaner-EU
+20010100001065 - Filter"
+0EQM56XD9NM,澳洲,PAU,X40 Ultra,扫地机,2026/09/09,R2416G62NAU5359401,拖布电机不良,更换备件/配件,维修（保内）,扫地机器人无法检测到已安装的拖布模块，导致无法启动拖地功能——这是客户送修的最主要原因。,"诊断备注：拖把电机故障  
+诊断备注：拖把电机故障  
+检修后备注：设备已维修并测试，更换了拖把垫齿轮组...","20020100009120 - Mop pad gearcase assembly
+20020100009132 - spare part battery for robotic vacuum cleaner"
+0EQM6QYPKYG,澳洲,PAU,L20 Ultra,扫地机,2026/09/24,R2394G446AU7269401,密封圈不良,更换备件/配件,维修（保外）,"今早我尝试使用追觅扫地机器人，但它又无法充电了。
+
+我怀疑可能是清洁液泄漏导致......","预检备注：洗涤剂泄漏/无法充电  
+诊断备注：,m  
+诊断备注：清洁泵  
+诊断备注：kkk  
+诊断备注：...","20020100006551 - Station recharging assembly（white）
+20020100008108 - Cleaning liquid peristaltic pump assembly in station
+20020100006526 - Cleantool and cheaning accept bracket assembly（white）
+20020100006507 - base staion upper bracket assembly（white）
+20020100008111 - Auto water refilling with recharge and harness assembly (white)
+20020100003520 - spare part battery for robotic vacuum cleaner-EU"
+0EQMBOE8L4G,澳洲,PAU,L50 Ultra,扫地机,2026/09/30,A66K02362R9493GAU,LDS组件不良,更换备件/配件,维修（保内）,拖布垫频繁脱落，导致机器人无法正常清洁。已尝试故障排查，但问题仍未解决。推测...,"预检备注：故障  
+诊断备注：故障  
+诊断备注：故障  
+诊断备注：故障  
+诊断备注：故障  
+复检备注：……","20020100028107 - Rear down view assembly
+20020100017105 - Mop pad gearcase assembly
+20020100017107 - LDS  assembly
+20010100000872 - Mop Pad"
+0EQMGVM4K3G,澳洲,PAU,Aqua10 Roller,扫地机,2026/09/08,:r9533Q599AU5293701,基站水泵板不良,更换备件/配件,维修（保内）,水箱不出水，抹布无法正常浸湿。客户已自行清洁并检查堵塞情况。,,
+0EQMM2PG25X,澳洲,PAU,X50 Ultra,扫地机,2026/09/28,r2489q51mau0216533,边刷电机不良,更换备件/配件,维修（保内）,"返回基座时无法自动对接（卡住）  
+未完成清洁任务（自行返回基座）  
+清洁效果不佳","诊断备注：需维修  
+诊断备注：需维修  
+诊断备注：需维修  
+诊断备注：需维修  
+检测后备注：设备已修复","20010100001070 - Side Brush
+20020100014952 - AI camera, motherboard, and core board assembly(AU)
+20020100012883 - Mop pad gearcase assembly
+20020100011747 - Side Brush Swing-out Assembly（BLK)"
+0EQMX7BWXKD,澳洲,PAU,L20 Ultra,扫地机,2026/09/04,r2394g412au6957101,外箱损坏,更换备件/配件,维修（保外）,保险杠传感器报错，客户尝试清洁传感器但无效,"预检备注：主板损坏  
+诊断备注：sdf  
+诊断备注：sdf  
+诊断备注：sdf  
+诊断备注：ar  
+复检备注：...","20020100007509 - Left main wheel assembly
+20020100007531 - Right main wheel assembly
+20020100010801 - Motherboard and camera assembly-AU
+20020100000108 - Omnidirectional Wheel Bracket Assembly
+20020100010801 - Motherboard and camera assembly-AU (DOA)"
+0EQMXDXN2W4,澳洲,PAU,X50 Ultra,扫地机,2026/09/30,R2489Q53MAU0288333,拖布电机不良,更换备件/配件,维修（保外）,"拖布盘未在基站自动拆卸。设定执行清洁时，机器人显示""开始清洁""并提示完成清洁，但实际未离开充电座。","预检备注：r  
+诊断备注：r  
+诊断备注：上次故障可能  
+诊断备注：r  
+检后备注：设备已修复并t...","20020100014952 - AI camera, motherboard, and core board assembly(AU)
+20020100012883 - Mop pad gearcase assembly
+20020100012883 - Mop pad gearcase assembly"
+0EQMXPX6DJA,澳洲,PAU,L40S Pro Ultra,扫地机,2026/09/21,R9419Q58CAU0402233,风机不良,更换备件/配件,维修（保外）,吸尘器运行摇晃不稳，无法正常按规划路线行进。随机区域吸尘不彻底。,"诊断备注：维修  
+检测后备注：设备已测试并通过  
+更换鼓风机",20020100014622 - Blower with harness assembly
+0EQOMDDVDZP,澳洲,PAU,X40 Ultra,扫地机,2026/09/03,R241G45NAU6604101,边刷卡扣不良,更换备件/配件,维修（保外）,我已重置设备，拧下滚刷并清理所有毛发，问题依旧；改为仅边缘清洁模式，滚刷仍不转动。,"诊断备注：A  
+诊断备注：A  
+诊断备注：A  
+检修后备注：设备已维修并测试，更换主板，边刷……","20020100010855 - Motherboard and camera assembly-AU
+20020100009103 - Side Brush Swing-out Assembly（Black）
+20010100001070 - side brush（Black)"
+0EQOMR7ZDW2,澳洲,PAU,Aqua10 Ultra Track S,扫地机,2026/09/10,stillincomplete,异响噪音,更换备件/配件,维修（保内）,奇怪的咔嗒声,,
+0EQPB12Z1R2,澳洲,PAU,Aqua10 Ultra Track S,扫地机,2026/09/24,R2527Q58FAU0382433,水箱磁铁未装,更换备件/配件,维修（保内）,"故障提示：污水箱已满，需清空；机器人将自动清洁。
+客户已清理整机、所有滤网及传感器......","诊断备注：滤网故障  
+诊断备注：水箱故障  
+诊断备注：废水箱故障  
+诊断备注：废水箱故障  
+...","20010100001863 - Filter
+20020100020753 - Main engine sump tank
+20020100020801 - Used Water Tank of base station
+20010100001865 - Mop Pad
+20020100017250 - Dust Collection Bag"
+0EQPB7J69P2,澳洲,PAU,L30 Ultra S,扫地机,2026/09/15,R2584G58KAU5172901,电池包不良,更换备件/配件,维修（保内）,机器人无法充电，基座一切正常，问题仅出在机器人本身。,"预检备注：机器人本身无法充电，其基座一切正常——问题仅出在机器人本身  
+诊断备注：主板  
+诊断备注...","20020100021323 - Motherboard and camera assembly-AU
+20020100010934 - spare part battery for robotic vacuum cleaner-EU"
+0EQPBELWNVG,澳洲,PAU,Aqua10 Roller,扫地机,2026/09/24,r9533q59aau5193101,电池包不良,更换备件/配件,维修（保内）,设备完全无法充电,"诊断备注：电池老化  
+检测后备注：设备已通过测试",20020100024364 - Battery pack EUA
+0EQPBM2DEAK,澳洲,PAU,Aqua10 Ultra Roller,扫地机,2026/09/17,R9533Q597AU5413401,污水泵不良,更换备件/配件,维修（保内）,漏水,"预检备注：故障  
+诊断备注：故障  
+诊断备注：故障  
+诊断备注：故障  
+复检备注：底座上残留少量水痕...","20020100020770 - Sewage pump assembly
+20020100020801 - Used Water Tank of base station
+20020100024549 - Robot Dirty Water Tank Assembly"
+0EQPD5JW4PA,澳洲,PAU,Aqua10 Roller,扫地机,2026/09/01,R9533Q5 BHAU5318901,其他问题(We have had a c...),退货,维修（保内）,客户反映一台Aqua Dreame Roller洗地机存在问题，近两个月持续与dreame官方沟通未果。dreame技术支持部门...,,
+0EQRDRKXA9A,澳洲,PAU,Z20 Station,吸尘器,2026/09/15,v2419d56bau0028130,充电提示异常,更换备件/配件,维修（保内）,主控头无法充电,"预检备注：间歇性充电  
+诊断备注：ERT  
+诊断备注：ERT  
+复检备注：设备已修复并测试，更换...","20020100012626 - Adapter mainboard Assembly
+20020100012621 - Grip Top Cover and Charging Assembly"
+0EQRZOYPQY2,澳洲,PAU,Aqua10 Roller,扫地机,2026/09/10,R9533Q63CAU6994301,地板刮伤,更换备件/配件,维修（保内）,吸尘器刮伤硬木地板。,,
+0EQW1D0DOQX,澳洲,PAU,L50 Ultra,扫地机,2026/09/03,R9493G58JAU0090533,拖布电机不良,更换备件/配件,维修（保外）,吸尘器无法回充。拖布垫似乎抬升不足，导致无法归位。,诊断备注：拖地功能问题,20010100000872 - Mop Pad
+0EQW9NKWYK4,澳洲,PAU,L40S Pro Ultra,扫地机,2026/09/02,R9419Q598AU00355A6,基站回充组件不良,更换备件/配件,维修（保内）,拖布盘在基站内持续循环转动。当它伸出进行清洁时，出现错误提示需手动放回基站。,"诊断备注：无法充电  
+诊断备注：无法充电  
+检修后备注：设备已修复并测试，更换了红外充电...","20020100009615 - Infrared Recharge Assembly of Base Station
+20020100012414 - Station recharging assembly(BLK)"
+0EQWDXABZJX,澳洲,PAU,Aqua10 Ultra Track S,扫地机,2026/09/04,R2527Q58FAU0411733,驱动轮不良,更换备件/配件,维修（保内）,"左侧轮子运行时无法转动。
+手动可以转动轮子。","预检备注：轮子问题  
+诊断备注：轮子  
+诊断备注：轮子  
+复检备注：设备已维修并测试，更换了……","20020100020842 - Left main wheel assembly
+20020100020820 - Right main wheel assembly"
+0EQWJLJ5JYX,澳洲,PAU,L30 Ultra S,扫地机,2026/09/10,R2584G58KAU5144801,水泵不良,更换备件/配件,二返,不抽水，吸力比刚买时小。,"诊断备注：已损坏  
+诊断备注：无吸力且无水  
+诊断备注：无吸力且无水  
+诊断备注：无吸力且无水...","20020100005924 - inlet pump assembly
+20020100011117 - Blower with harness assembly
+20020100005905 - outlet pump assembly
+20020100005924 - inlet pump assembly"
+0EQWJLJ5JYX,澳洲,PAU,L30 Ultra S,扫地机,2026/09/29,R2584G58KAU5144801,吸力不足,更换备件/配件,二返,不抽水，吸力比刚买时小。,,
+0EQWK6DMXKE,澳洲,PAU,L40s Ultra,扫地机,2026/09/01,R2551G54HAU0409433WO:7992,驱动轮不良,更换备件/配件,维修（保外）,机器人未使用其升降/边缘传感器，客户不得不频繁抬起机器人才能完成清洁任务。机器人无法......,诊断备注：左轮故障,20020100011727 - Left main wheel assembly
+0EQWNJP0ZGA,澳洲,PAU,X50 Ultra,扫地机,2026/09/02,R2489Q53QAU0744433,拖布电机不良,更换备件/配件,维修（保内）,我的X50 Ultra无法识别安装的拖布垫，总是提示“拖布安装失败”或“拖布脱落，请重新安装”。,"诊断备注：A  
+检测后备注：设备测试通过，更换了拖布齿轮箱",20020100012883 - Mop pad gearcase assembly
