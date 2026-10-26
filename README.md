@@ -60,6 +60,27 @@ streamlit run app.py
 
 > 代码读取顺序：系统环境变量优先，其次才是 `.env`。所以 Secret 方式不需要 `.env` 文件。
 
+### 方式三：部署成网页链接（同事打开即用）
+
+想让同事**不用装任何东西**就能用，部署到 Streamlit Community Cloud（免费）：
+
+1. 打开 https://share.streamlit.io ，用 GitHub 账号登录
+2. 点 **New app** → 选仓库 `robotcleaner/-`，Branch 选 `main`，Main file path 填 `app.py`
+3. 点 **Advanced settings** → 在 **Secrets** 里填：
+
+   ```toml
+   SILICONFLOW_API_KEY = "sk-你的密钥"
+   ```
+
+4. 点 **Deploy**，等 1–2 分钟，得到形如 `https://xxxx.streamlit.app` 的链接
+
+把那个 `https://xxxx.streamlit.app` 链接发给同事，对方浏览器打开就能用（无需 GitHub 账号、无需安装 Python）。
+
+**注意**：
+- 同一实例是共享的，多人**同时**处理时进度文件会互相干扰，建议同一时间一人使用；如需多人并行，可改为「会话隔离」模式。
+- 翻译缓存不纳入仓库，线上首次运行会重新调用接口，产生少量费用。
+- 免费实例闲置一段时间会休眠，首次打开需等十几秒唤醒。
+
 ## 使用流程
 
 1. 选择区域 / 服务商

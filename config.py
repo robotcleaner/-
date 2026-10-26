@@ -3,8 +3,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _get_secret(name: str, default: str = "") -> str:
+    """读取配置，优先级：环境变量 → .env → Streamlit secrets。
+
+    线上部署（Streamlit Community Cloud）时密钥存在 st.secrets 里，
+    而不是环境变量，所以这里做一层兜底。
+    """
+    val = os.getenv(name, "")
+    if val:
+        return val
+    try:
+        import streamlit as st
+        return str(st.secrets.get(name, default) or default)
+    except Exception:
+        return default
+
+
 # ===== 硅基流动配置 =====
-SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
+SILICONFLOW_API_KEY = _get_secret("SILICONFLOW_API_KEY", "")
 SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
 MODEL_TRANSLATE = "deepseek-ai/DeepSeek-V3"
 MODEL_CLASSIFY  = "deepseek-ai/DeepSeek-V3"
