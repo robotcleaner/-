@@ -134,7 +134,7 @@ if uploaded is not None:
 
     st.success(f"已读取 {len(df_raw)} 条工单，共 {len(df_raw.columns)} 列")
     with st.expander("预览原始数据（前 5 行）"):
-        st.dataframe(df_raw.head(5), use_container_width=True)
+        st.dataframe(df_raw.head(5), width="stretch")
 
     # ========== 断点续跑 ==========
     if Path(PARTIAL_FILE).exists():
@@ -175,7 +175,7 @@ if uploaded is not None:
                 )
                 with st.expander("查看标签修正明细", expanded=False):
                     st.dataframe(pd.DataFrame(label_diff),
-                                 use_container_width=True, height=200)
+                                 width="stretch", height=200)
             if fixed_mark:
                 st.warning(f"🔧 已把 {fixed_mark} 行的返修标记追加到「处理方式」列")
 
@@ -404,11 +404,11 @@ if df_rate is not None and len(df_rate) > 0:
                 key = {"仅重复": "重复", "仅二返": "二返", "仅三返": "三返"}[sel]
                 view = detail_df[
                     detail_df[MARK_COL].astype(str).str.startswith(key)]
-            st.dataframe(view, use_container_width=True, height=420)
+            st.dataframe(view, width="stretch", height=420)
         with tab_rate:
-            st.dataframe(rate_df, use_container_width=True, height=420)
+            st.dataframe(rate_df, width="stretch", height=420)
         with tab_all:
-            st.dataframe(full_df, use_container_width=True, height=420)
+            st.dataframe(full_df, width="stretch", height=420)
 
         def _to_xlsx(df_, sheet="Sheet1"):
             buf = io.BytesIO()
