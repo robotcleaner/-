@@ -631,6 +631,15 @@ check("型号写法差异合并为一行", len(_kdf2) == 2)
 check("BU 缺失时按型号前缀推断", set(_kdf2["类别"]) == {"扫地机", "洗地机"})
 check("合并后数量为 2", int(_kdf2.iloc[0]["故障数量"]) == 2)
 
+from key_products import _bu_from_model as _bu
+check("BU 映射补充：W10 → 扫地机", _bu("W10") == "扫地机")
+check("BU 映射补充：T30 / U20 → 吸尘器",
+      _bu("T30") == "吸尘器" and _bu("U20") == "吸尘器")
+check("BU 映射补充：Aero Straight Pro → 吸尘器",
+      _bu("Aero Straight Pro") == "吸尘器")
+check("原有映射未被破坏（X50→扫地机 / H12→洗地机）",
+      _bu("X50 Ultra") == "扫地机" and _bu("H12 Pro") == "洗地机")
+
 check("空表返回齐全的列", list(build_key_products(_pd.DataFrame()).columns) == KEY_COLUMNS)
 check("摘要统计正确",
       summarize_key_products(_kdf)["models"] == 3
