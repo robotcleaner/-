@@ -9,7 +9,11 @@ import time
 
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+for _p in (_ROOT, os.path.join(_ROOT, "core"), _HERE):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 PASS = []
 
@@ -562,7 +566,7 @@ check("返修次数聚类：相隔 18 天算 2 次",
 check("返修次数聚类：空值返回 0", _ce([], 3) == 0)
 
 print("== 16. 视频英文化：流水线模块可导入 ==")
-_ven = os.path.join(os.path.dirname(os.path.abspath(__file__)), "video_en")
+_ven = os.path.join(_ROOT, "video_en")
 if _ven not in sys.path:
     sys.path.insert(0, _ven)
 import ven_config
@@ -706,12 +710,31 @@ check("单 sheet 排名表表头正确",
 
 try:
     from streamlit.testing.v1 import AppTest as _AT
-    _at = _AT.from_file("key_page.py", default_timeout=90)
+    _at = _AT.from_file(os.path.join(_ROOT, "key_page.py"), default_timeout=90)
     _at.run()
     check("key_page 无运行时异常", not _at.exception)
     check("key_page 有数据来源选择", len(_at.radio) >= 1)
 except Exception as _e:      # noqa: BLE001
     check(f"key_page 无运行时异常（{type(_e).__name__}）", False)
+
+print("== 19. 目录结构 / 启动器 ==")
+import paths as _paths
+check("paths 定位到项目根", os.path.samefile(_paths.ROOT_DIR, _ROOT))
+check("data 目录存在", os.path.isdir(_paths.DATA_DIR))
+check("state 目录存在（运行时自动创建）", os.path.isdir(_paths.STATE_DIR))
+check("质保表在 data/ 下",
+      os.path.isfile(os.path.join(_paths.DATA_DIR, "warranty_table.csv")))
+import config as _cfg
+check("断点文件在 state/ 下",
+      os.path.dirname(os.path.abspath(_cfg.PARTIAL_RESULT_FILE)) == str(_paths.STATE_DIR))
+
+import launch as _launch
+check("启动器可导入", hasattr(_launch, "pick_port") and hasattr(_launch, "ensure_deps"))
+check("核心依赖清单齐全", len(_launch.CORE_DEPS) >= 5)
+check("端口探测返回 bool", isinstance(_launch.port_free(1), bool))
+check("挑端口落在 8501-8510",
+      _launch.DEFAULT_PORT <= _launch.pick_port(_launch.DEFAULT_PORT) <= _launch.MAX_PORT)
+check("run.bat 存在且为纯 ASCII", (lambda p: os.path.isfile(p) and all(b < 128 for b in open(p, "rb").read()))(os.path.join(_ROOT, "run.bat")))
 
 print()
 failed = [n for n, ok in PASS if not ok]

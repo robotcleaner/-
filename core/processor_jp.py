@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
+from paths import data_path
 from config_jp import (
     COLUMN_MAP_JP, OUTPUT_COLUMNS_JP,
     FIXED_REGION_JP, FIXED_AGENT_JP,
@@ -24,7 +25,7 @@ from repeat import RepeatClassifier, apply_label
 
 
 # ==================== 加载官方故障对照表 ====================
-FAULT_TABLE_FILE = "产品故障分类中英韩日文.xlsx"
+FAULT_TABLE_FILE = data_path("产品故障分类中英韩日文.xlsx")
 JP_TO_CN_FAULT_STD = {}
 JP_FAULT_CN_LIST = []
 JP_KEYWORD_MAP = {}
@@ -118,7 +119,7 @@ def _normalize_jp_text(text: str) -> str:
 
 
 # ==================== 本地缓存 ====================
-JP_CACHE_FILE = "fault_mapping_jp.json"
+JP_CACHE_FILE = data_path("fault_mapping_jp.json")
 # JsonStore：线程安全 + 防抖落盘（旧实现每新增一条就全量重写整个文件）
 _jp_cache = JsonStore(JP_CACHE_FILE)
 

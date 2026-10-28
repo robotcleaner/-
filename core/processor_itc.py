@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
+from paths import data_path
 from config_itc import (
     COLUMN_MAP_ITC, OUTPUT_COLUMNS_ITC,
     FIXED_REGION_ITC, FIXED_AGENT_ITC,
@@ -87,7 +88,7 @@ def _get_col(row, name):
 
 
 # ==================== 本地缓存 ====================
-ITC_CACHE_FILE = "fault_mapping_itc.json"
+ITC_CACHE_FILE = data_path("fault_mapping_itc.json")
 # JsonStore：线程安全 + 防抖落盘（旧实现每新增一条就全量重写整个文件）
 _itc_cache = JsonStore(ITC_CACHE_FILE)
 

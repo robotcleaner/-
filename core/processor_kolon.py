@@ -4,6 +4,7 @@ import threading
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
+from paths import data_path
 from config_kolon import (
     COLUMN_MAP_KOLON, OUTPUT_COLUMNS_KOLON,
     FIXED_REGION_KOLON, FIXED_AGENT_KOLON,
@@ -69,7 +70,7 @@ def _normalize_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ==================== 本地缓存 ====================
-KOLON_CACHE_FILE = "fault_mapping_kolon.json"
+KOLON_CACHE_FILE = data_path("fault_mapping_kolon.json")
 # JsonStore：线程安全 + 防抖落盘（旧实现每新增一条就全量重写整个文件）
 _kolon_cache = JsonStore(KOLON_CACHE_FILE)
 

@@ -15,8 +15,9 @@ import streamlit as st
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 VEN_DIR = os.path.join(BASE_DIR, "video_en")
-if VEN_DIR not in sys.path:
-    sys.path.insert(0, VEN_DIR)
+for _p in (BASE_DIR, os.path.join(BASE_DIR, "core"), VEN_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 st.title("🎬 中文视频英文化")
 st.caption("上传中文视频 → 语音识别 → 翻译 + 配音 + 烧录字幕 → 下载成品")

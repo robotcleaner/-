@@ -2,6 +2,7 @@ import hashlib
 from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from paths import state_path
 from config import (
     SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,
     MODEL_TRANSLATE, MODEL_CLASSIFY,
@@ -22,7 +23,7 @@ client = OpenAI(
 #   - 写入只进内存（加锁，多线程安全）；
 #   - 累计 10 条新条目或每隔 10 秒由后台线程落盘一次；
 #   - atexit 保证进程退出前最终落盘。
-CACHE_FILE = ".cache.json"
+CACHE_FILE = state_path(".cache.json")
 _cache = JsonStore(CACHE_FILE)
 
 

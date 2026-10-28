@@ -6,7 +6,16 @@
 
 （部署到 Streamlit Cloud 时，Main file path 填 main.py）
 """
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+# 业务模块在 core/ 下，页面脚本也会各自注入；这里统一兜一层，保证 import 一定能找到
+_ROOT = Path(__file__).resolve().parent
+for _p in (str(_ROOT), str(_ROOT / "core")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 st.set_page_config(
     page_title="工具集 · 工单处理 / 视频英文化",

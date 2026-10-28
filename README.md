@@ -8,7 +8,8 @@
 | 工单处理 | 🏆 重点产品故障排名 | 上传**已整理好的工单**，生成 BU / 型号 / 故障数量 / TOP 故障类型占比 |
 | 视频工具 | 🎬 视频英文化 | 中文视频 → 外语字幕 + 配音（ASR / 翻译 / TTS / 烧录） |
 
-启动：`streamlit run main.py`（入口是 `main.py`，不是 `app.py`）
+**启动（Windows 最省事）**：双击 **`run.bat`**，浏览器会自动打开，不用碰命令行。
+其它方式：`streamlit run main.py`（入口是 `main.py`，不是 `app.py`）
 
 ## 支持区域
 
@@ -59,7 +60,7 @@ sheet2 的 5 列与《重点产品故障数量和类型.xlsx》一致：
 - 「TOP故障类型」里的百分比分母是**该型号自身的工单数**，不是整个 BU
 - 「未发现故障 / NFF」计入故障数量，但不参与故障类型排名
 - 型号大小写、空格写法差异会自动合并（`x50  ultra` 与 `X50 Ultra` 视为同一型号）
-- BU 为空时按型号前缀（`config.PRODUCT_BU_MAP`）自动推断；推断不出的归入「未分类」，可在 `config.py` 里补一行映射
+- BU 为空时按型号前缀（`core/config.py` 的 `PRODUCT_BU_MAP`）自动推断；推断不出的归入「未分类」，可在 `core/config.py` 里补一行映射
 
 页面底部「🏆 重点产品故障 TOP3」区块可直接预览这张表，也可单独下载；模型数 / TOP 条数 / 类别范围同时作用于预览和导出。
 
@@ -68,7 +69,7 @@ sheet2 的 5 列与《重点产品故障数量和类型.xlsx》一致：
 命令行用法：
 
 ```bash
-python key_products.py 已处理工单.xlsx -o 重点产品故障TOP3.xlsx --top-models 5 --top-faults 3
+python core/key_products.py 已处理工单.xlsx -o 重点产品故障TOP3.xlsx --top-models 5 --top-faults 3
 ```
 
 ## 二返率统计
@@ -87,7 +88,7 @@ python key_products.py 已处理工单.xlsx -o 重点产品故障TOP3.xlsx --top
 命令行同样可用（原 `2.py` 用法）：
 
 ```bash
-python return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 3 --return-days 90
+python core/return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 3 --return-days 90
 ```
 
 ## 快速开始
@@ -95,9 +96,17 @@ python return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 3 --return
 > ⚠️ **入口必须是 `main.py`，不是 `app.py`。**
 > 直接跑 `streamlit run app.py` 只会打开工单处理单页，**左侧没有导航、看不到另外两个工具**。
 
-### 方式零：双击启动（Windows）
+### 方式零：双击启动（Windows，推荐）
 
-双击仓库根目录的 **`start.bat`**，等价于 `streamlit run main.py`，浏览器开 http://localhost:8501
+双击根目录的 **`run.bat`** 就行，不需要打开 Python 或命令行：
+
+- 自动找 Python（`py` 启动器 → `PATH` 里的 `python` → 常见安装目录）
+- 首次运行缺依赖会自动 `pip install`（约 1–3 分钟，只有第一次）
+- 自动挑空闲端口（默认 8501，被占用就顺延），并自动打开浏览器
+- 如果工具**已经在跑**，再双击只会把浏览器打开到已有页面，不会重复启动
+- **关闭那个黑色窗口 = 停止服务**（已下载的文件不受影响）
+
+也可以传端口：`run.bat 8600`。`start.bat` 保留为兼容入口，等价于 `run.bat`。
 
 ### 方式一：本地运行
 
@@ -183,21 +192,49 @@ streamlit run main.py
 3. 点「开始处理」，可随时暂停
 4. 处理完成后下载「优化后工单.xlsx」
 
-处理过程中每完成一行就写入 `partial_result_<区域>.csv`，中断后重新上传同一文件即可继续。
+处理过程中每完成一行就写入 `state/partial_result_<区域>.csv`，中断后重新上传同一文件即可继续。
 
 ## 输出列
 
 `工单号 / 区域 / 代理 / 型号 / 产品BU / 日期 / SN / 故障类型（一级）/ 处理方式 / 类别 / 故障描述 / 维修详情`（澳洲另有「备件消耗」）
 
-## 目录说明
+## 目录结构
+
+```
+ticket_processor/
+├── run.bat            ← 双击启动（推荐）
+├── start.bat          ← 兼容入口，等价于 run.bat
+├── launch.py          ← 启动器：查依赖 / 挑端口 / 开浏览器
+├── main.py            ← 入口，左侧分组导航
+├── app.py             ← 🔧 工单处理页
+├── key_page.py        ← 🏆 重点产品故障排名页
+├── video_page.py      ← 🎬 视频英文化页
+├── core/              ← 业务模块（配置 / 处理器 / 统计 / 缓存）
+├── data/              ← 数据与缓存（故障对照表、质保表、参考 Excel）
+├── state/             ← 运行时状态（断点结果、翻译缓存；首次运行自动创建）
+├── tools/             ← 调试 / 一次性脚本（含冒烟测试）
+├── video_en/          ← 视频流水线模块（ASR / 翻译 / TTS / 字幕 / ffmpeg）
+├── requirements.txt
+├── packages.txt       ← 云端部署用（ffmpeg）
+└── README.md
+```
+
+### 根目录（入口与页面）
 
 | 文件 | 说明 |
 |---|---|
+| `run.bat` / `start.bat` | 双击启动，等价于 `streamlit run main.py` |
+| `launch.py` | 启动器：依赖检查 / 自动装依赖 / 挑空闲端口 / 开浏览器 |
 | `main.py` | **统一入口**（左侧分组切换三个页面） |
-| `key_page.py` | 重点产品故障排名页（独立子页面，上传已处理工单即可出排名） |
 | `app.py` | 工单处理页面 |
+| `key_page.py` | 重点产品故障排名页（上传已处理工单即可出排名） |
 | `video_page.py` | 视频英文化页面 |
-| `video_en/` | 视频流水线模块（ASR / 翻译 / TTS / 字幕 / ffmpeg） |
+
+### `core/`（业务模块）
+
+| 文件 | 说明 |
+|---|---|
+| `paths.py` | 统一目录定位（`data/`、`state/`），不依赖启动时的工作目录 |
 | `processor.py` | 澳洲（AU）处理器 |
 | `processor_kr.py` / `processor_kolon.py` | 韩国 SK / KOLON 处理器 |
 | `processor_jp.py` / `processor_itc.py` | 日本 NGK / ITC 处理器 |
@@ -208,20 +245,36 @@ streamlit run main.py
 | `model_norm.py` | 型号格式归一化 |
 | `batch.py` | 并发执行器 + 防抖落盘缓存 |
 | `llm_client.py` | LLM 调用与缓存 |
-| `config*.py` | 各区域列映射、提示词、字典表 |
-| `_smoke_test.py` | 冒烟测试（不调用真实 LLM） |
+| `config*.py` | 各区域列映射、提示词、字典表（含 `PRODUCT_BU_MAP`） |
+
+### `data/` 与 `state/`
+
+| 位置 | 内容 |
+|---|---|
+| `data/fault_mapping*.json` | 故障对照表缓存（各区域，翻译过的故障名） |
+| `data/warranty_table.csv` | 型号质保年限表 |
+| `data/产品故障分类中英韩日文.xlsx` | 日本 NGK 故障对照 |
+| `state/partial_result_<区域>.csv` | 断点续跑结果（含真实工单数据） |
+| `state/.cache.json` | LLM 翻译缓存 |
+
+> 目录位置由 `core/paths.py` 统一解析，所以**双击 run.bat、命令行启动、云端部署**读到的都是同一份文件，不会因为工作目录不同而"找不到数据"。
+
+### `tools/`（调试 / 一次性脚本）
+
+`_smoke_test.py`（冒烟测试）、`debug_*.py`、`test_*.py`、`sk_*.py`、`config_au_optimized.py`、`processor_kr_enhanced.py` 等。
+这些脚本**不参与网页运行**，只是排查问题时用，删掉也不影响主流程。
 
 ## 注意
 
 以下文件**不纳入版本控制**（含密钥或真实工单数据），请勿提交：
 
 - `.env`（API 密钥）
-- `.cache.json`、`fault_mapping*.json`（翻译缓存，含工单文本）
-- `partial_result*.csv`（处理结果，含真实 SN）
+- `data/fault_mapping*.json`、`state/.cache.json`（翻译缓存，含工单文本）
+- `state/partial_result*.csv`（处理结果，含真实 SN）
 - `__pycache__/`
 
 运行冒烟测试：
 
 ```bash
-python _smoke_test.py
+python tools/_smoke_test.py
 ```

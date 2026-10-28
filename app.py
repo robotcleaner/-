@@ -1,8 +1,18 @@
 import io
 import os
+import sys
 from pathlib import Path
+
+# 业务模块在 core/ 下：把 core 加入 sys.path，模块内仍是平铺 import（import config 等）
+_ROOT = Path(__file__).resolve().parent
+for _p in (str(_ROOT), str(_ROOT / "core")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import pandas as pd
 import streamlit as st
+
+from paths import state_path
 
 from processor import process_dataframe as process_dataframe_au
 from config import OUTPUT_COLUMNS as OUTPUT_COLUMNS_AU, MAX_WORKERS
@@ -59,35 +69,35 @@ region = st.selectbox(
 )
 
 if region.startswith("澳洲"):
-    PARTIAL_FILE = "partial_result_au.csv"
+    PARTIAL_FILE = state_path("partial_result_au.csv")
     OUTPUT_COLUMNS = OUTPUT_COLUMNS_AU
     process_dataframe = process_dataframe_au
     TICKET_NUMBER_COL = "Ticket Number"
     OUTPUT_TICKET_COL = "工单号"
     IS_KOLON = False
 elif "KOLON" in region:
-    PARTIAL_FILE = "partial_result_kolon.csv"
+    PARTIAL_FILE = state_path("partial_result_kolon.csv")
     OUTPUT_COLUMNS = OUTPUT_COLUMNS_KOLON
     process_dataframe = process_dataframe_kolon
     TICKET_NUMBER_COL = "접수번호"
     OUTPUT_TICKET_COL = "工单号"
     IS_KOLON = True
 elif "ITC" in region:
-    PARTIAL_FILE = "partial_result_itc.csv"
+    PARTIAL_FILE = state_path("partial_result_itc.csv")
     OUTPUT_COLUMNS = OUTPUT_COLUMNS_ITC
     process_dataframe = process_dataframe_itc
     TICKET_NUMBER_COL = "RMA"
     OUTPUT_TICKET_COL = "工单号"
     IS_KOLON = True   # 复用 KOLON 的"自动探测表头"分支
 elif "NGK" in region or "日本" in region:
-    PARTIAL_FILE = "partial_result_jp.csv"
+    PARTIAL_FILE = state_path("partial_result_jp.csv")
     OUTPUT_COLUMNS = OUTPUT_COLUMNS_JP
     process_dataframe = process_dataframe_jp
     TICKET_NUMBER_COL = "唯一键"
     OUTPUT_TICKET_COL = "唯一键"
     IS_KOLON = False
 else:
-    PARTIAL_FILE = "partial_result_kr.csv"
+    PARTIAL_FILE = state_path("partial_result_kr.csv")
     OUTPUT_COLUMNS = OUTPUT_COLUMNS_KR
     process_dataframe = process_dataframe_kr
     TICKET_NUMBER_COL = "접수번호"

@@ -10,11 +10,19 @@
 """
 
 import io
+import sys
 from pathlib import Path
+
+# 业务模块在 core/ 下：把 core 加入 sys.path
+_ROOT = Path(__file__).resolve().parent
+for _p in (str(_ROOT), str(_ROOT / "core")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import pandas as pd
 import streamlit as st
 
+from paths import state_path
 from key_products import (
     build_key_products, write_excel_with_key_sheet, write_key_sheet_only,
     summarize_key_products, KEY_SHEET_NAME, KEY_COLUMNS,
@@ -23,11 +31,11 @@ from key_products import (
 
 # 各区域断点结果文件（与 app.py 保持一致）
 REGION_FILES = {
-    "澳洲（PAU）": "partial_result_au.csv",
-    "韩国（SK）": "partial_result_kr.csv",
-    "韩国（KOLON）": "partial_result_kolon.csv",
-    "日本（NGK）": "partial_result_jp.csv",
-    "日本（ITC）": "partial_result_itc.csv",
+    "澳洲（PAU）": state_path("partial_result_au.csv"),
+    "韩国（SK）": state_path("partial_result_kr.csv"),
+    "韩国（KOLON）": state_path("partial_result_kolon.csv"),
+    "日本（NGK）": state_path("partial_result_jp.csv"),
+    "日本（ITC）": state_path("partial_result_itc.csv"),
 }
 
 # 上传文件的列名容错：不同来源的已处理工单列名可能略有差异

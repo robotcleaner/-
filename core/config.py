@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
 
+from paths import data_path, state_path
+
 load_dotenv()
 
 
@@ -44,7 +46,7 @@ FIXED_REGION = "澳洲"
 FIXED_AGENT  = "PAU"
 
 # ===== 断点续跑相关 =====
-PARTIAL_RESULT_FILE = "partial_result.csv"
+PARTIAL_RESULT_FILE = state_path("partial_result.csv")
 
 # ===== 原始表 → 输出表 的列映射（优化版 - 支持多区域）=====
 COLUMN_MAP = {
@@ -124,7 +126,7 @@ OUTPUT_COLUMNS = [
 ]
 
 # ===== 质保表文件 =====
-WARRANTY_TABLE_FILE = "warranty_table.csv"
+WARRANTY_TABLE_FILE = data_path("warranty_table.csv")
 DEFAULT_WARRANTY_YEARS = 1
 REFURB_WINDOW_DAYS = 90
 
@@ -157,7 +159,7 @@ PRODUCT_BU_MAP = {
 }
 
 # ===== 故障本地对照表路径 =====
-FAULT_MAPPING_FILE = "fault_mapping.json"
+FAULT_MAPPING_FILE = data_path("fault_mapping.json")
 
 # ===== 初始预置故障对照表（已暴力扩充常见英文）=====
 DEFAULT_FAULT_MAPPING = {
