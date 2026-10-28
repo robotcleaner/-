@@ -371,6 +371,79 @@ tmp_csv = os.path.join(d, "partial_test.csv")
 check("修正结果可写回断点文件",
       write_partial(fixed_df, tmp_csv) and os.path.exists(tmp_csv))
 
+print("== 12. return_rate：二返率计算（移植自 2.py）==")
+from return_rate import (classify_return, calc_return_rate, build_detail,
+                         summarize, MARK_COL)
+
+rr_src = pd.DataFrame([
+    # SN-A：完全重复（同日期同描述同维修）
+    {"工单号": "A1", "SN": "SN-A", "日期": "2026/01/01", "故障描述": "D1",
+     "维修详情": "R1", "故障类型（一级）": "电池包不良", "型号": "X50 Ultra",
+     "处理方式": "更换备件/配件"},
+    {"工单号": "A2", "SN": "SN-A", "日期": "2026/01/01", "故障描述": "D1",
+     "维修详情": "R1", "故障类型（一级）": "电池包不良", "型号": "X50 Ultra",
+     "处理方式": "更换备件/配件"},
+    # SN-A：31 天后同故障 → 二返（故障重现）
+    {"工单号": "A3", "SN": "SN-A", "日期": "2026/02/01", "故障描述": "D2",
+     "维修详情": "R2", "故障类型（一级）": "电池包不良", "型号": "X50 Ultra",
+     "处理方式": "更换备件/配件"},
+    # SN-A：再 37 天后不同故障 → 三返
+    {"工单号": "A4", "SN": "SN-A", "日期": "2026/03/10", "故障描述": "D3",
+     "维修详情": "R3", "故障类型（一级）": "水泵不良", "型号": "X50 Ultra",
+     "处理方式": "更换整机"},
+    # SN-B：首现 + 3 天后 → 窗口内重复
+    {"工单号": "B1", "SN": "SN-B", "日期": "2026/01/05", "故障描述": "D4",
+     "维修详情": "R4", "故障类型（一级）": "主刷不良", "型号": "L40 Ultra",
+     "处理方式": "更换备件/配件"},
+    {"工单号": "B2", "SN": "SN-B", "日期": "2026/01/08", "故障描述": "D5",
+     "维修详情": "R5", "故障类型（一级）": "主刷不良", "型号": "L40 Ultra",
+     "处理方式": "更换备件/配件"},
+])
+
+rr = classify_return(rr_src, dup_window_days=5, return_window_days=90)
+marks = rr[MARK_COL].tolist()
+check("完全重复 → 重复", marks[1] == "重复")
+check("窗口内（3 天）重复 → 重复", marks[5] == "重复")
+check("首现不标记", marks[0] == "" and marks[4] == "")
+check("同 SN 异日第 2 次同故障 → 二返（故障重现）",
+      marks[2] == "二返（故障重现）")
+check("同 SN 异日第 3 次不同故障 → 三返", marks[3] == "三返")
+
+info = summarize(rr)
+check("汇总：总工单数", info["总工单数"] == 6)
+check("汇总：返修数 = 2", info["返修数"] == 2)
+check("汇总：二返数 = 1", info["二返数"] == 1)
+check("汇总：重复数 = 2", info["重复数"] == 2)
+check("汇总：二返率 = 16.67%", info["二返率(%)"] == 16.67)
+
+rate = calc_return_rate(rr)
+row_x50 = rate[rate["型号"] == "X50 Ultra"].iloc[0]
+check("型号统计：X50 Ultra 总 4 单", int(row_x50["总工单数"]) == 4)
+check("型号统计：X50 Ultra 返修 2 单", int(row_x50["返修数"]) == 2)
+check("型号统计：返修率 50%", float(row_x50["返修率(%)"]) == 50.0)
+
+detail = build_detail(rr)
+check("明细报告只含被标记行（4 条）", len(detail) == 4)
+check("明细报告带关联工单号列", "关联工单号" in detail.columns)
+
+# 窗口可调：重复窗口 0 天 → 3 天间隔不再算重复，改判二返
+rr0 = classify_return(rr_src, dup_window_days=0, return_window_days=90)
+check("重复窗口调为 0 天 → 3 天间隔改判二返",
+      rr0[MARK_COL].tolist()[5].startswith("二返"))
+
+# 覆盖处理方式（与原脚本一致）
+rr_ow = classify_return(rr_src, 5, 90, overwrite_method=True)
+check("覆盖处理方式：标记行被替换",
+      rr_ow.iloc[1]["处理方式"] == "重复")
+check("覆盖处理方式：未标记行保留原值",
+      rr_ow.iloc[0]["处理方式"] == "更换备件/配件")
+
+# 空表 / 缺列不应报错
+empty_out = classify_return(pd.DataFrame(), 5, 90)
+check("空表不报错", len(empty_out) == 0)
+nocol_out = classify_return(pd.DataFrame([{"工单号": "X"}]), 5, 90)
+check("缺列不报错", len(nocol_out) == 1)
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")

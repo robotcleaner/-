@@ -21,6 +21,12 @@ from config_jp import OUTPUT_COLUMNS_JP
 from processor_itc import process_dataframe_itc, find_header_row as find_header_row_itc
 from config_itc import OUTPUT_COLUMNS_ITC
 
+# 二返率统计（移植自「二返率计算/2.py」）
+from return_rate import (
+    classify_return, calc_return_rate, build_detail, summarize,
+    MARK_COL, RELATED_COL,
+)
+
 
 st.set_page_config(
     page_title="维修工单自动处理",
@@ -281,6 +287,107 @@ if uploaded is not None:
         except Exception as e:
             st.session_state.processing = False
             st.error(f"处理中断：{e}")
+
+# ==================== 二返率统计（独立分析）====================
+st.divider()
+st.header("📊 二返率统计")
+st.caption(
+    "对已处理结果按 SN + 日期重新判定 重复 / 二返 / 三返，并统计型号维度二返率。"
+    "（与处理阶段的「类别」列独立，窗口可调）"
+)
+
+rate_src = st.radio(
+    "数据来源",
+    ["当前区域的已处理结果", "上传已处理工单文件"],
+    horizontal=True,
+)
+
+df_rate = None
+if rate_src == "当前区域的已处理结果":
+    if partial_path.exists():
+        try:
+            df_rate = pd.read_csv(partial_path, encoding="utf-8-sig",
+                                  on_bad_lines="skip")
+            st.caption(f"已读取 `{PARTIAL_FILE}`：{len(df_rate)} 行")
+        except Exception as e:
+            st.error(f"读取失败：{e}")
+    else:
+        st.info(f"未找到 `{PARTIAL_FILE}`，请先处理工单，或改用「上传已处理工单文件」。")
+else:
+    up_rate = st.file_uploader("上传已处理工单（.xlsx / .csv）",
+                               type=["xlsx", "csv"], key="rate_upload")
+    if up_rate is not None:
+        try:
+            if up_rate.name.lower().endswith(".csv"):
+                df_rate = pd.read_csv(up_rate, encoding="utf-8-sig",
+                                      on_bad_lines="skip")
+            else:
+                df_rate = pd.read_excel(up_rate, engine="openpyxl")
+            df_rate.columns = [str(c).strip() for c in df_rate.columns]
+            st.caption(f"已读取：{len(df_rate)} 行")
+        except Exception as e:
+            st.error(f"读取失败：{e}")
+
+if df_rate is not None and len(df_rate) > 0:
+    c1, c2, c3 = st.columns([1, 1, 1.4])
+    dup_days = c1.number_input(
+        "重复判定窗口（天）", min_value=0, max_value=60, value=5, step=1,
+        help="同 SN 日期间隔 ≤ 该值视为重复；填 0 表示仅同日算重复")
+    ret_days = c2.number_input(
+        "返修判定窗口（天）", min_value=7, max_value=730, value=90, step=1,
+        help="向前回看多少天内的同 SN 历史工单")
+    overwrite = c3.checkbox(
+        "用标记覆盖「处理方式」列", value=False,
+        help="勾选后与原二返率脚本的输出一致；默认保留原处理方式，另加「处理标记」列")
+
+    missing_cols = [c for c in ("SN", "日期") if c not in df_rate.columns]
+    if missing_cols:
+        st.error(f"缺少必要列：{missing_cols}，无法判定。请上传本工具输出的已处理工单。")
+    else:
+        rr = classify_return(df_rate, int(dup_days), int(ret_days),
+                             overwrite_method=bool(overwrite))
+        info = summarize(rr)
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("总工单数", info["总工单数"])
+        m2.metric("返修（二返及以上）",
+                  f'{info["返修数"]} 条', f'{info["返修率(%)"]}%')
+        m3.metric("其中二返", f'{info["二返数"]} 条', f'{info["二返率(%)"]}%')
+        m4.metric("重复", f'{info["重复数"]} 条', f'{info["重复率(%)"]}%')
+
+        detail_df = build_detail(rr)
+        rate_df = calc_return_rate(rr)
+        full_df = rr.drop(columns=[MARK_COL, RELATED_COL], errors="ignore")
+
+        tab_detail, tab_rate, tab_all = st.tabs(
+            ["📋 明细报告", "📈 型号二返率", "🗂 全量结果"])
+        with tab_detail:
+            st.caption(f"被标记为 重复 / 二返 / 三返 的工单：{len(detail_df)} 条")
+            st.dataframe(detail_df, use_container_width=True, height=420)
+        with tab_rate:
+            st.dataframe(rate_df, use_container_width=True, height=420)
+        with tab_all:
+            st.dataframe(full_df, use_container_width=True, height=420)
+
+        def _to_xlsx(df_, sheet="Sheet1"):
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                df_.to_excel(writer, index=False, sheet_name=sheet)
+            buf.seek(0)
+            return buf
+
+        XLSX_MIME = ("application/vnd.openxmlformats-officedocument"
+                     ".spreadsheetml.sheet")
+        b1, b2, b3 = st.columns(3)
+        b1.download_button("📥 全量结果.xlsx", _to_xlsx(full_df),
+                           "二返重复_处理结果.xlsx", mime=XLSX_MIME,
+                           key="dl_rate_all")
+        b2.download_button("📥 明细报告.xlsx", _to_xlsx(detail_df),
+                           "二返重复_明细报告.xlsx", mime=XLSX_MIME,
+                           key="dl_rate_detail")
+        b3.download_button("📥 二返率统计.xlsx", _to_xlsx(rate_df),
+                           "二返率统计.xlsx", mime=XLSX_MIME,
+                           key="dl_rate_rate")
 
 with st.sidebar:
     st.divider()
