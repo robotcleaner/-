@@ -91,6 +91,13 @@ python return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 3 --return
 
 ## 快速开始
 
+> ⚠️ **入口必须是 `main.py`，不是 `app.py`。**
+> 直接跑 `streamlit run app.py` 只会打开工单处理单页，**左侧没有导航、看不到另外两个工具**。
+
+### 方式零：双击启动（Windows）
+
+双击仓库根目录的 **`start.bat`**，等价于 `streamlit run main.py`，浏览器开 http://localhost:8501
+
 ### 方式一：本地运行
 
 ```bash
@@ -101,7 +108,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env，填入 SILICONFLOW_API_KEY
 
-# 3. 启动
+# 3. 启动（注意是 main.py）
 streamlit run main.py
 ```
 
