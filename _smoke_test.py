@@ -667,6 +667,29 @@ _buf2.seek(0)
 check("add_key_sheet=False 只写主表",
       _opx.load_workbook(_buf2).sheetnames == ["已处理"])
 
+# 类别过滤：默认只算 维修（保内）+ DOA
+_kp_raw3 = _pd.DataFrame([
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "拖布电机不良", "类别": "维修（保内）"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "拖布电机不良", "类别": "维修（保内）"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "LDS组件不良", "类别": "DOA"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "主板不良", "类别": "维修（保外）"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "电池包不良", "类别": "重复"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "未发现故障", "类别": "无异常（NFF）"},
+])
+_kdf3 = build_key_products(_kp_raw3, top_models=5, top_faults=3)
+check("默认只算 保内 + DOA（3/6 条）", int(_kdf3.iloc[0]["故障数量"]) == 3)
+_kdf3_all = build_key_products(_kp_raw3, top_models=5, top_faults=3,
+                               include_categories=None)
+check("include_categories=None 统计全部（6 条）",
+      int(_kdf3_all.iloc[0]["故障数量"]) == 6)
+_kdf3_bx = build_key_products(_kp_raw3, top_models=5, top_faults=3,
+                              include_categories=("维修（保外）",))
+check("可指定任意类别（仅保外 1 条）", int(_kdf3_bx.iloc[0]["故障数量"]) == 1)
+check("保外 / 重复 / NFF 的故障类型不进默认榜",
+      "主板不良" not in _kdf3.iloc[0]["TOP故障类型（单机型占比）"]
+      and "电池包不良" not in _kdf3.iloc[0]["TOP故障类型（单机型占比）"])
+check("没有类别列时自动不过滤（旧表兼容）", int(_kdf.iloc[0]["故障数量"]) == 4)
+
 print("== 18. key_page：重点产品故障排名页（独立子页面）==")
 import py_compile as _pyc
 _pyc.compile("key_page.py", doraise=True)

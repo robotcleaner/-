@@ -31,17 +31,19 @@ from return_rate import (
 from key_products import (
     build_key_products, write_excel_with_key_sheet, summarize_key_products,
     KEY_SHEET_NAME, KEY_COLUMNS, DEFAULT_TOP_MODELS, DEFAULT_TOP_FAULTS,
+    DEFAULT_CATEGORIES,
 )
 
 
 def _kp_opts():
-    """读取「重点产品 TOP3」的 N 配置（界面可调，预览与导出共用）。"""
+    """读取「重点产品 TOP3」的配置（界面可调，预览与导出共用）。"""
     try:
         n_models = int(st.session_state.get("kp_top_models", DEFAULT_TOP_MODELS))
         n_faults = int(st.session_state.get("kp_top_faults", DEFAULT_TOP_FAULTS))
     except Exception:
         n_models, n_faults = DEFAULT_TOP_MODELS, DEFAULT_TOP_FAULTS
-    return max(1, n_models), max(1, n_faults)
+    cats = st.session_state.get("kp_cats", list(DEFAULT_CATEGORIES))
+    return max(1, n_models), max(1, n_faults), (list(cats) if cats else None)
 
 
 # 页面配置由入口 main.py 统一设置（多工具共用一个入口时只能设置一次）
@@ -246,10 +248,11 @@ if uploaded is not None:
         if partial_df is not None and len(partial_df) > 0:
             export_df = partial_df[[c for c in OUTPUT_COLUMNS if c in partial_df.columns]]
             buffer = io.BytesIO()
-            _n_models, _n_faults = _kp_opts()
+            _n_models, _n_faults, _cats = _kp_opts()
             write_excel_with_key_sheet(
                 export_df, buffer, main_sheet="已处理",
                 top_models=_n_models, top_faults=_n_faults,
+                include_categories=_cats,
             )
             buffer.seek(0)
             st.download_button(
@@ -310,10 +313,11 @@ if uploaded is not None:
                 all_df = pd.read_csv(PARTIAL_FILE, encoding="utf-8-sig", on_bad_lines='skip')
                 all_df = all_df[[c for c in OUTPUT_COLUMNS if c in all_df.columns]]
                 buffer = io.BytesIO()
-                _n_models, _n_faults = _kp_opts()
+                _n_models, _n_faults, _cats = _kp_opts()
                 write_excel_with_key_sheet(
                     all_df, buffer, main_sheet="优化后工单",
                     top_models=_n_models, top_faults=_n_faults,
+                    include_categories=_cats,
                 )
                 buffer.seek(0)
                 st.download_button(
@@ -351,10 +355,25 @@ if partial_df is not None and len(partial_df) > 0:
             min_value=1, max_value=10, step=1, key="kp_top_faults",
         )
 
+    # 类别范围：默认只算 维修（保内）+ DOA（排除 保外 / 无异常 / 重复 / 二返 / 三返）
+    _cat_opts = [c for c in dict.fromkeys(
+        partial_df.get("类别", pd.Series(dtype=str))
+        .fillna("").astype(str).str.strip()) if c]
+    _cat_default = [c for c in DEFAULT_CATEGORIES if c in _cat_opts] or _cat_opts
+    st.session_state.setdefault("kp_cats", _cat_default)
+    _sel_cats = st.multiselect(
+        "只统计这些类别",
+        _cat_opts,
+        key="kp_cats",
+        help="默认只算 维修（保内）+ DOA，排除 保外 / 无异常（NFF）/ 重复 / 二返 / 三返。"
+             "清空则统计全部类别。",
+    )
+
     key_df = build_key_products(
         partial_df,
         top_models=int(st.session_state.get("kp_top_models", DEFAULT_TOP_MODELS)),
         top_faults=int(st.session_state.get("kp_top_faults", DEFAULT_TOP_FAULTS)),
+        include_categories=list(_sel_cats) if _sel_cats else None,
     )
 
     if len(key_df) == 0:

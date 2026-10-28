@@ -6,6 +6,9 @@
 
 口径说明
 --------
+- **统计范围**：默认只统计「类别」为 **维修（保内）** 和 **DOA** 的工单，
+  即排除 维修（保外）/ 无异常（NFF）/ 重复 / 二返 / 三返。可通过
+  `include_categories=None` 改为全部类别。
 - **占比**：该型号故障数 ÷ 该 BU 全部故障数（0% 整数百分比，与参考表一致）。
   同一 BU 内只列头部机型，所以各机型占比之和会小于 100%，属正常。
 - **TOP故障类型**：`1.故障类型--21%\\n2.故障类型--16%`，其中百分比是
@@ -26,6 +29,9 @@ DEFAULT_TOP_FAULTS = 3      # 每个型号列前 N 个故障类型
 
 # 不参与「故障类型」排名的值（计入数量，但不作为 TOP 故障）
 EXCLUDE_FAULTS = ("未发现故障", "NFF", "无异常", "无异常（NFF）")
+
+# 默认只统计这两类「类别」：排除 保外 / 无异常（NFF）/ 重复 / 二返 / 三返
+DEFAULT_CATEGORIES = ("维修（保内）", "DOA")
 
 _EMPTY_TOKENS = ("", "nan", "nat", "none", "null", "n/a", "-")
 
@@ -101,6 +107,8 @@ def build_key_products(
     fault_col: str = "故障类型（一级）",
     exclude_faults=EXCLUDE_FAULTS,
     bu_filter=None,
+    category_col: str = "类别",
+    include_categories=DEFAULT_CATEGORIES,
 ) -> pd.DataFrame:
     """生成「重点产品故障 TOP3」表。
 
@@ -110,6 +118,9 @@ def build_key_products(
     top_models : 每个 BU 保留故障数前 N 的型号
     top_faults : 每个型号保留前 N 个故障类型
     bu_filter : 可选，只统计指定 BU（list / tuple / set）
+    include_categories : 只统计这些「类别」的行；None / 空 = 全部类别。
+        默认只算 维修（保内）+ DOA，即**排除 保外 / 无异常（NFF）/ 重复 / 二返 / 三返**。
+        文件里没有「类别」列时该过滤自动失效（无法判断，按全部统计）。
 
     返回
     ----
@@ -123,12 +134,20 @@ def build_key_products(
         "bu": df[bu_col].map(_s) if bu_col in df.columns else "",
         "model": df[model_col].map(_norm_model) if model_col in df.columns else "",
         "fault": df[fault_col].map(_s) if fault_col in df.columns else "",
+        "cat": df[category_col].map(_s) if category_col in df.columns else "",
     })
 
     # 型号为空的行无法归组，直接丢弃
     d = d[d["model"] != ""]
     if len(d) == 0:
         return empty
+
+    # 类别过滤：只保留 维修（保内）/ DOA 等指定类别
+    if include_categories and category_col in df.columns:
+        wanted = {_s(x) for x in include_categories}
+        d = d[d["cat"].isin(wanted)]
+        if len(d) == 0:
+            return empty
 
     # BU 缺失时按型号前缀推断
     blank = d["bu"] == ""
@@ -287,6 +306,7 @@ def write_excel_with_key_sheet(
     top_faults: int = DEFAULT_TOP_FAULTS,
     key_df: pd.DataFrame | None = None,
     add_key_sheet: bool = True,
+    include_categories=DEFAULT_CATEGORIES,
 ) -> pd.DataFrame:
     """写 Excel：sheet1 = 工单明细，sheet2 = 重点产品故障 TOP3。
 
@@ -295,7 +315,8 @@ def write_excel_with_key_sheet(
     """
     if key_df is None and add_key_sheet:
         key_df = build_key_products(main_df, top_models=top_models,
-                                    top_faults=top_faults)
+                                    top_faults=top_faults,
+                                    include_categories=include_categories)
     if key_df is None:
         key_df = pd.DataFrame(columns=KEY_COLUMNS)
 
@@ -319,14 +340,20 @@ if __name__ == "__main__":
     ap.add_argument("-o", "--out", default="重点产品故障TOP3.xlsx")
     ap.add_argument("--top-models", type=int, default=DEFAULT_TOP_MODELS)
     ap.add_argument("--top-faults", type=int, default=DEFAULT_TOP_FAULTS)
+    ap.add_argument(
+        "--categories", nargs="*", default=list(DEFAULT_CATEGORIES),
+        help=f"只统计这些类别（默认 {'、'.join(DEFAULT_CATEGORIES)}；传空串表示全部）",
+    )
     args = ap.parse_args()
 
     src = args.xlsx
     raw = (pd.read_csv(src, dtype=str, encoding="utf-8-sig")
            if src.lower().endswith((".csv", ".tsv"))
            else pd.read_excel(src, dtype=str))
+    cats = [c for c in (args.categories or []) if c.strip()] or None
     kdf = build_key_products(raw, top_models=args.top_models,
-                             top_faults=args.top_faults)
+                             top_faults=args.top_faults,
+                             include_categories=cats)
     write_excel_with_key_sheet(raw, args.out, main_sheet="已处理", key_df=kdf)
-    print(f"已写出 {args.out}：{len(kdf)} 行")
+    print(f"已写出 {args.out}：{len(kdf)} 行（类别范围：{cats or '全部'}）")
     print(kdf.to_string(index=False))

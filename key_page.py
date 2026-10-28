@@ -18,7 +18,7 @@ import streamlit as st
 from key_products import (
     build_key_products, write_excel_with_key_sheet, write_key_sheet_only,
     summarize_key_products, KEY_SHEET_NAME, KEY_COLUMNS,
-    DEFAULT_TOP_MODELS, DEFAULT_TOP_FAULTS,
+    DEFAULT_TOP_MODELS, DEFAULT_TOP_FAULTS, DEFAULT_CATEGORIES,
 )
 
 # 各区域断点结果文件（与 app.py 保持一致）
@@ -35,6 +35,7 @@ COL_CANDIDATES = {
     "bu": ("产品BU", "BU", "品类", "产品线"),
     "model": ("型号", "机型", "Model", "Product Model"),
     "fault": ("故障类型（一级）", "故障类型(一级)", "故障类型", "Fault Type"),
+    "cat": ("类别", "Category", "分类"),
 }
 
 
@@ -145,10 +146,31 @@ with c2:
         value=DEFAULT_TOP_FAULTS, step=1,
     )
 
-# 先把全部 BU 算出来（占比不受筛选影响），再按用户选择过滤
+# 类别范围：默认只算 维修（保内）+ DOA
+col_cat = _pick_col(df_src, COL_CANDIDATES["cat"])
+sel_cats: list[str] | None = None
+if col_cat is None:
+    st.caption("文件里没有「类别」列，无法按类别筛选，将统计全部工单。")
+else:
+    _cat_opts = [c for c in dict.fromkeys(
+        df_src[col_cat].fillna("").astype(str).str.strip()) if c]
+    _default = [c for c in DEFAULT_CATEGORIES if c in _cat_opts] or _cat_opts
+    sel_cats = st.multiselect(
+        "只统计这些类别",
+        _cat_opts,
+        default=_default,
+        help="默认只算 维修（保内）+ DOA，即排除 保外 / 无异常（NFF）/ 重复 / 二返 / 三返。"
+             "清空则统计全部类别。",
+    )
+    if not sel_cats:
+        st.caption("未选择类别 = 统计全部类别。")
+        sel_cats = None
+
+# 先把全部 BU 算出来（占比不受 BU 筛选影响），再按用户选择过滤
 key_all = build_key_products(
     df_src, top_models=int(n_models), top_faults=int(n_faults),
     bu_col=col_bu or "产品BU", model_col=col_model, fault_col=col_fault,
+    category_col=col_cat or "类别", include_categories=sel_cats,
 )
 
 if len(key_all) == 0:
@@ -172,6 +194,17 @@ m1, m2, m3 = st.columns(3)
 m1.metric("覆盖 BU", _sum["bus"])
 m2.metric("重点型号数", _sum["models"])
 m3.metric("这些型号的故障合计", _sum["total"])
+
+if col_cat is not None:
+    if sel_cats:
+        _mask = df_src[col_cat].fillna("").astype(str).str.strip().isin(sel_cats)
+        st.caption(
+            f"统计范围：类别 = {' / '.join(sel_cats)}，"
+            f"纳入 **{int(_mask.sum())}** / {len(df_src)} 行"
+            f"（已排除其余类别）"
+        )
+    else:
+        st.caption(f"统计范围：全部类别，共 {len(df_src)} 行")
 
 _view = key_df.copy()
 _view["占比"] = _view["占比"].map(lambda x: f"{x:.0%}")
@@ -207,7 +240,10 @@ with d2:
 with st.expander("口径说明"):
     st.markdown(
         f"""
-- **占比**：该型号故障数 ÷ **该 BU 全部工单数**。同一 BU 内各型号占比之和小于 100% 属正常。
+- **统计范围**：默认只算「类别」= **维修（保内）** 和 **DOA**，
+  即排除 维修（保外）/ 无异常（NFF）/ 重复 / 二返 / 三返。可在上方多选框调整。
+- **占比**：该型号故障数 ÷ **该 BU 全部工单数**（同样只算纳入范围的类别）。
+  同一 BU 内各型号占比之和小于 100% 属正常。
 - **TOP 里的百分比**：该故障类型 ÷ **该型号自身工单数**，与上面的占比不是同一个分母。
 - **未发现故障 / NFF**：计入故障数量，但不参与故障类型排名。
 - **型号写法差异**（大小写、多余空格）会自动合并为同一型号。
