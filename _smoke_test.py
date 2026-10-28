@@ -174,7 +174,7 @@ check("KR 同 SN 不同日期 → 二返", kr_out.iloc[1]["类别"].startswith("
 check("KR 同 SN 同日 → 重复", kr_out.iloc[3]["类别"] == "重复")
 
 print("== 7. repeat.RepeatClassifier：A / D / B / C / 首现 / 历史前驱 / 乱序 ==")
-from repeat import RepeatClassifier, apply_label
+from repeat import RepeatClassifier, apply_label, merge_method, backfill_method_marks
 
 records = [
     {"pos": 0, "sn": "S1", "date": "2026/01/01", "desc": "不抽水", "detail": "水泵损坏"},
@@ -452,6 +452,48 @@ check("覆盖处理方式：标记行被替换",
       rr_ow.iloc[1]["处理方式"] == "重复")
 check("覆盖处理方式：未标记行保留原值",
       rr_ow.iloc[0]["处理方式"] == "更换备件/配件")
+
+# 默认：追加标记，不丢原值
+check("默认追加：标记行 = 重复 / 更换备件/配件",
+      rr.iloc[1]["处理方式"] == "重复 / 更换备件/配件")
+check("默认追加：未标记行不变",
+      rr.iloc[0]["处理方式"] == "更换备件/配件")
+rr_keep = classify_return(rr_src, 5, 90, method_mode="keep")
+check("keep 模式不动处理方式",
+      rr_keep.iloc[1]["处理方式"] == "更换备件/配件")
+
+print("== 13. repeat.merge_method：处理方式追加标记 ==")
+check("追加：补发配件 + 重复",
+      merge_method("补发配件", "重复") == "重复 / 补发配件")
+check("追加：空处理方式只留标记",
+      merge_method("", "重复") == "重复")
+check("追加幂等：已含同标记不重复追加",
+      merge_method("重复 / 补发配件", "重复") == "重复 / 补发配件")
+check("追加替换：标记不同则替换旧标记",
+      merge_method("重复 / 补发配件", "二返（重现）") == "二返（重现） / 补发配件")
+check("非返修类别不改处理方式",
+      merge_method("更换备件", "维修（保内）") == "更换备件")
+
+bf_df = pd.DataFrame({
+    "类别": ["重复", "二返（重现）", "维修（保内）", ""],
+    "处理方式": ["补发配件", "更换备件", "维修（保内）", ""],
+})
+bf_out, bf_n = backfill_method_marks(bf_df)
+check("历史行回填：2 行被追加标记", bf_n == 2)
+check("历史行回填：重复行 = 重复 / 补发配件",
+      bf_out.iloc[0]["处理方式"] == "重复 / 补发配件")
+check("历史行回填：保内行不变",
+      bf_out.iloc[2]["处理方式"] == "维修（保内）")
+_, bf_n2 = backfill_method_marks(bf_out)
+check("历史行回填幂等", bf_n2 == 0)
+
+label_out = {"类别": "维修（保内）", "处理方式": "补发配件",
+             "故障类型（一级）": ""}
+apply_label(label_out, 0, {0: {"label": "重复", "pred_pos": None,
+                               "pred_fault": None}}, [], lambda r: {})
+check("apply_label 同步追加处理方式",
+      label_out["类别"] == "重复"
+      and label_out["处理方式"] == "重复 / 补发配件")
 
 # 空表 / 缺列不应报错
 empty_out = classify_return(pd.DataFrame(), 5, 90)

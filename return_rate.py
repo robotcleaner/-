@@ -26,6 +26,8 @@ from datetime import datetime
 
 import pandas as pd
 
+from repeat import merge_method
+
 # 判定用到的标准列
 COL_SN = "SN"
 COL_DATE = "日期"
@@ -91,7 +93,8 @@ def _s(val) -> str:
 def classify_return(df: pd.DataFrame,
                     dup_window_days: int = 5,
                     return_window_days: int = 90,
-                    overwrite_method: bool = False) -> pd.DataFrame:
+                    method_mode: str = "append",
+                    overwrite_method: bool | None = None) -> pd.DataFrame:
     """给已处理结果打「重复 / 二返 / 三返」标记。
 
     Args:
@@ -99,11 +102,19 @@ def classify_return(df: pd.DataFrame,
             故障类型（一级）/ 工单号 / 型号 等列，缺失列按空值处理）。
         dup_window_days: 同 SN 日期间隔 ≤ 该值视为重复。
         return_window_days: 返修判定的历史回看窗口。
-        overwrite_method: True 时用标记覆盖「处理方式」列（与原脚本一致）。
+        method_mode: 「处理方式」列的处理方式
+            - "append"    追加标记，如「重复 / 补发配件」（默认，不丢原值）
+            - "overwrite" 用标记覆盖原值（与原 2.py 脚本一致）
+            - "keep"      不动处理方式，标记只放「处理标记」列
+        overwrite_method: 兼容旧参数；显式传入时覆盖 method_mode。
 
     Returns:
         新 DataFrame，含 MARK_COL（处理标记）与 RELATED_COL（关联工单号）。
     """
+    if overwrite_method is not None:
+        method_mode = "overwrite" if overwrite_method else "keep"
+    if method_mode not in ("append", "overwrite", "keep"):
+        method_mode = "append"
     work = df.reset_index(drop=True).copy()
     for col in (COL_SN, COL_DATE, COL_DESC, COL_DETAIL, COL_FAULT,
                 COL_TICKET, COL_MODEL, COL_METHOD):
@@ -200,9 +211,15 @@ def classify_return(df: pd.DataFrame,
     work[RELATED_COL] = related
     work = work.drop(columns=["_dt", "_pos"])
 
-    if overwrite_method:
-        original = work[COL_METHOD].astype(str).where(work[COL_METHOD].notna(), "")
-        work[COL_METHOD] = [m if m else o for m, o in zip(marks, original)]
+    if method_mode != "keep":
+        original = ["" if pd.isna(v) else str(v).strip()
+                    for v in work[COL_METHOD].tolist()]
+        if method_mode == "append":
+            work[COL_METHOD] = [merge_method(o, m)
+                                for m, o in zip(marks, original)]
+        else:  # overwrite
+            work[COL_METHOD] = [m if m else o
+                                for m, o in zip(marks, original)]
 
     return work
 
@@ -326,6 +343,9 @@ def main():
                         help="重复判定窗口天数（默认 5）")
     parser.add_argument("--return-days", type=int, default=90,
                         help="返修判定窗口天数（默认 90）")
+    parser.add_argument("--method-mode", default="append",
+                        choices=["append", "overwrite", "keep"],
+                        help="处理方式列：append 追加标记（默认）/ overwrite 覆盖 / keep 不改")
     args = parser.parse_args()
 
     if not args.input or not os.path.exists(args.input):
@@ -337,7 +357,8 @@ def main():
     df.columns = [str(c).strip() for c in df.columns]
     print(f"读取 {args.input}：{len(df)} 行")
 
-    result = classify_return(df, args.dup_days, args.return_days)
+    result = classify_return(df, args.dup_days, args.return_days,
+                             method_mode=args.method_mode)
     detail = build_detail(result)
     rate = calc_return_rate(result)
     info = summarize(result)

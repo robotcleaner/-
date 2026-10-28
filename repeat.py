@@ -220,4 +220,65 @@ def apply_label(out: dict, pos, plan: dict, rows_snapshot: list,
             label, out.get("故障类型（一级）", ""), pred_fault)
 
     out["类别"] = label
+    # 标记同步追加到「处理方式」列：重复 / 二返（重现） / 更换备件
+    # （保留原处理方式，便于在工单表里直接按处理方式筛出返修单）
+    out["处理方式"] = merge_method(out.get("处理方式", ""), label)
     return out
+
+
+# ==================== 处理方式列合并 ====================
+_REPEAT_NUM = "二三四五六七八九十"
+
+
+def is_repeat_label(val) -> bool:
+    """判断是否为返修类标签（重复 / 二返 / 三返 / 四返…）。"""
+    s = str(val or "").strip()
+    if not s:
+        return False
+    if s == "重复":
+        return True
+    return len(s) >= 2 and s[0] in _REPEAT_NUM and s[1] == "返"
+
+
+def merge_method(method, label) -> str:
+    """把返修标签追加到处理方式前面，幂等（已含则替换，不叠加）。"""
+    m = str(method or "").strip()
+    lb = str(label or "").strip()
+    if not is_repeat_label(lb):
+        return m
+
+    # 先剥掉已有的返修标记（可能来自处理阶段的类别列），避免「二返 / 重复 / …」
+    base = m
+    if " / " in m:
+        head, rest = m.split(" / ", 1)
+        if is_repeat_label(head):
+            base = rest.strip()
+    elif is_repeat_label(m):
+        base = ""
+
+    if not base:
+        return lb
+    return f"{lb} / {base}"
+
+
+def backfill_method_marks(df, label_col: str = "类别",
+                          method_col: str = "处理方式"):
+    """把已有结果里「类别」的返修标签补写进「处理方式」（纯字符串，无 LLM）。
+
+    返回 (新 DataFrame, 被补写的行数)。用于断点文件里改造前生成的历史行。
+    """
+    if label_col not in df.columns or method_col not in df.columns:
+        return df, 0
+    labels = df[label_col].tolist()
+    methods = df[method_col].tolist()
+    changed = 0
+    for i, (m, lb) in enumerate(zip(methods, labels)):
+        new_m = merge_method(m, lb)
+        old_m = "" if m is None or (isinstance(m, float) and m != m) else str(m).strip()
+        if new_m != old_m:
+            methods[i] = new_m
+            changed += 1
+    if changed:
+        df = df.copy()
+        df[method_col] = methods
+    return df, changed

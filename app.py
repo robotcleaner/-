@@ -156,19 +156,29 @@ if uploaded is not None:
         partial_df = None
         done_ids = set()
 
-    # ========== 日期口径修正 ==========
-    # 断点文件里的旧行可能用的是旧日期来源（如澳洲曾用创建日期）。
-    # 这里按当前口径从本次上传的源表重新取一次，按工单号回填，零成本。
+    # ========== 断点数据修正 ==========
+    # 1) 日期口径：断点文件里的旧行可能用的是旧日期来源（如澳洲曾用创建日期），
+    #    按当前口径从本次上传的源表重新取一次，按工单号回填，零成本。
+    # 2) 处理方式列：把「类别」里的返修标记（重复/二返/三返）追加进「处理方式」，
+    #    纯字符串操作，让历史行也带上标记。
     if partial_df is not None and len(partial_df) > 0:
         try:
             from date_refresh import refresh_partial_dates, write_partial
-            partial_df, fixed = refresh_partial_dates(partial_df, df_raw, region)
-            if fixed:
-                st.warning(f"🔧 已按当前日期口径修正断点文件中 {fixed} 行的日期")
+            from repeat import backfill_method_marks
+
+            partial_df, fixed_date = refresh_partial_dates(partial_df, df_raw, region)
+            partial_df, fixed_mark = backfill_method_marks(partial_df)
+
+            if fixed_date:
+                st.warning(f"🔧 已按当前日期口径修正断点文件中 {fixed_date} 行的日期")
+            if fixed_mark:
+                st.warning(f"🔧 已把 {fixed_mark} 行的返修标记追加到「处理方式」列")
+
+            if fixed_date or fixed_mark:
                 if write_partial(partial_df, partial_path):
                     st.caption("已同步写回断点文件")
         except Exception as e:
-            st.caption(f"日期口径修正跳过：{e}")
+            st.caption(f"断点数据修正跳过：{e}")
 
     # ========== 往批历史（用于 重复 / 二返 / 三返 判定）==========
     # 断点文件里是已处理完的标准化行：其 SN + 日期 可作为"该 SN 之前
@@ -336,16 +346,19 @@ if df_rate is not None and len(df_rate) > 0:
     ret_days = c2.number_input(
         "返修判定窗口（天）", min_value=7, max_value=730, value=90, step=1,
         help="向前回看多少天内的同 SN 历史工单")
-    overwrite = c3.checkbox(
-        "用标记覆盖「处理方式」列", value=False,
-        help="勾选后与原二返率脚本的输出一致；默认保留原处理方式，另加「处理标记」列")
+    overwrite = c3.radio(
+        "「处理方式」列", ["追加标记", "覆盖原值", "不改"], index=0,
+        horizontal=True,
+        help="追加：重复 / 补发配件（推荐，不丢原信息）；覆盖：整格变「重复」；不改：标记只放「处理标记」列")
 
     missing_cols = [c for c in ("SN", "日期") if c not in df_rate.columns]
     if missing_cols:
         st.error(f"缺少必要列：{missing_cols}，无法判定。请上传本工具输出的已处理工单。")
     else:
+        mode = {"追加标记": "append", "覆盖原值": "overwrite",
+                "不改": "keep"}[overwrite]
         rr = classify_return(df_rate, int(dup_days), int(ret_days),
-                             overwrite_method=bool(overwrite))
+                             method_mode=mode)
         info = summarize(rr)
 
         m1, m2, m3, m4 = st.columns(4)
