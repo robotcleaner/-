@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""统一入口：左侧切换「工单处理」/「视频英文化」两个工具。
+"""统一入口：左侧按分组切换「工单处理」/「视频英文化」。
 
 启动方式：
     streamlit run main.py
@@ -14,9 +14,14 @@ st.set_page_config(
     layout="wide",
 )
 
-pages = [
-    st.Page("app.py", title="工单处理", icon="🔧", default=True),
-    st.Page("video_page.py", title="视频英文化", icon="🎬"),
-]
+pages = {
+    "工单处理": [
+        st.Page("app.py", title="工单处理", icon="🔧", default=True),
+        st.Page("key_page.py", title="重点产品故障排名", icon="🏆"),
+    ],
+    "视频工具": [
+        st.Page("video_page.py", title="视频英文化", icon="🎬"),
+    ],
+}
 
 st.navigation(pages).run()

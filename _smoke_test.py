@@ -667,6 +667,29 @@ _buf2.seek(0)
 check("add_key_sheet=False 只写主表",
       _opx.load_workbook(_buf2).sheetnames == ["已处理"])
 
+print("== 18. key_page：重点产品故障排名页（独立子页面）==")
+import py_compile as _pyc
+_pyc.compile("key_page.py", doraise=True)
+check("key_page.py 语法正确", True)
+
+from key_products import write_key_sheet_only as _wkso
+_b3 = _io.BytesIO()
+_wkso(_kdf, _b3)
+_b3.seek(0)
+_wb3 = _opx.load_workbook(_b3)
+check("单 sheet 排名表只有 1 个 sheet", _wb3.sheetnames == [KEY_SHEET_NAME])
+check("单 sheet 排名表表头正确",
+      [_wb3[KEY_SHEET_NAME].cell(1, c).value for c in range(1, 6)] == KEY_COLUMNS)
+
+try:
+    from streamlit.testing.v1 import AppTest as _AT
+    _at = _AT.from_file("key_page.py", default_timeout=90)
+    _at.run()
+    check("key_page 无运行时异常", not _at.exception)
+    check("key_page 有数据来源选择", len(_at.radio) >= 1)
+except Exception as _e:      # noqa: BLE001
+    check(f"key_page 无运行时异常（{type(_e).__name__}）", False)
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")

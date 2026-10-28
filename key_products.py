@@ -266,6 +266,19 @@ def _style_key_sheet(ws, key_df: pd.DataFrame) -> None:
     ws.freeze_panes = "A2"
 
 
+def write_key_sheet_only(key_df: pd.DataFrame, target) -> None:
+    """只写「重点产品故障TOP3」一个 sheet（带样式）。
+
+    target 可以是路径或 BytesIO。样式失败不影响数据写入。
+    """
+    with pd.ExcelWriter(target, engine="openpyxl") as writer:
+        key_df.to_excel(writer, index=False, sheet_name=KEY_SHEET_NAME)
+        try:
+            _style_key_sheet(writer.sheets[KEY_SHEET_NAME], key_df)
+        except Exception:
+            pass
+
+
 def write_excel_with_key_sheet(
     main_df: pd.DataFrame,
     target,
