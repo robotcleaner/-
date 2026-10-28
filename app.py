@@ -164,17 +164,26 @@ if uploaded is not None:
     if partial_df is not None and len(partial_df) > 0:
         try:
             from date_refresh import refresh_partial_dates, write_partial
-            from repeat import backfill_method_marks
+            from repeat import backfill_method_marks, relabel_repeat
 
             partial_df, fixed_date = refresh_partial_dates(partial_df, df_raw, region)
+            partial_df, fixed_label, label_diff = relabel_repeat(partial_df)
             partial_df, fixed_mark = backfill_method_marks(partial_df)
 
             if fixed_date:
                 st.warning(f"🔧 已按当前日期口径修正断点文件中 {fixed_date} 行的日期")
+            if fixed_label:
+                st.warning(
+                    f"🔧 已按当前规则重判 {fixed_label} 行的返修标签"
+                    "（同 SN 同日 → 重复；异日 → 二返/三返）"
+                )
+                with st.expander("查看标签修正明细", expanded=False):
+                    st.dataframe(pd.DataFrame(label_diff),
+                                 use_container_width=True, height=200)
             if fixed_mark:
                 st.warning(f"🔧 已把 {fixed_mark} 行的返修标记追加到「处理方式」列")
 
-            if fixed_date or fixed_mark:
+            if fixed_date or fixed_label or fixed_mark:
                 if write_partial(partial_df, partial_path):
                     st.caption("已同步写回断点文件")
         except Exception as e:

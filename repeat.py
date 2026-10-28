@@ -282,3 +282,71 @@ def backfill_method_marks(df, label_col: str = "类别",
         df = df.copy()
         df[method_col] = methods
     return df, changed
+
+
+def relabel_repeat(df, label_col: str = "类别", method_col: str = "处理方式",
+                   date_col: str = "日期", sn_col: str = "SN",
+                   desc_col: str = "故障描述", detail_col: str = "维修详情",
+                   fault_col: str = "故障类型（一级）"):
+    """用当前规则重判已有结果里的返修标签（纯本地计算，不调 LLM）。
+
+    背景：断点文件是多次运行累积的，早期版本（没有「同 SN 同日 → 重复」规则）
+    留下的标签会一直保留，导致本该是「重复」的单显示成「二返」。
+
+    规则与处理阶段完全一致：
+      - 同 SN + 同日期                    → 重复
+      - 同 SN + 不同日期，第 2/3+ 个日期   → 二返 / 三返
+        与前驱故障类型一致 →（重现），否则（新故障）
+
+    保守策略：新规则判定为「首现」（无标签）时**保留原值**，避免把基类
+    （保内/保外/DOA/NFF）误清空。
+
+    返回 (新 DataFrame, 修正行数, 修正明细列表)。
+    """
+    need = [label_col, date_col, sn_col]
+    if any(c not in df.columns for c in need):
+        return df, 0, []
+
+    def _col(name):
+        return df[name].tolist() if name in df.columns else [""] * len(df)
+
+    sns, dates = _col(sn_col), _col(date_col)
+    descs, details, faults = _col(desc_col), _col(detail_col), _col(fault_col)
+
+    records = [{"pos": i, "sn": sns[i], "date": dates[i],
+                "desc": descs[i], "detail": details[i]}
+               for i in range(len(df))]
+    plan = RepeatClassifier().build_plan(records)
+
+    labels = ["" if v is None else str(v).strip() for v in df[label_col].tolist()]
+    methods = ["" if v is None else str(v).strip() for v in _col(method_col)]
+    changed, details_out = 0, []
+
+    for pos, info in plan.items():
+        new = info.get("label")
+        if not new:
+            continue          # 首现：保留原值
+        if new in ("二返", "三返"):
+            pred_fault = info.get("pred_fault")
+            if not pred_fault:
+                pred_pos = info.get("pred_pos")
+                if pred_pos is not None and 0 <= pred_pos < len(faults):
+                    pred_fault = faults[pred_pos]
+            new = RepeatClassifier.resolve_label(new, faults[pos], pred_fault)
+
+        if new == labels[pos]:
+            continue
+        details_out.append({"工单号": _col("工单号")[pos] if "工单号" in df.columns else "",
+                            "SN": sns[pos], "日期": dates[pos],
+                            "原标签": labels[pos], "新标签": new})
+        labels[pos] = new
+        if method_col in df.columns:
+            methods[pos] = merge_method(methods[pos], new)
+        changed += 1
+
+    if changed:
+        df = df.copy()
+        df[label_col] = labels
+        if method_col in df.columns:
+            df[method_col] = methods
+    return df, changed, details_out

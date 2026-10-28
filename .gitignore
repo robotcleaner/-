@@ -8,6 +8,7 @@
 .cache.json
 fault_mapping*.json
 partial_result*.csv
+partial_result*.csv.bak*
 partial_result*.xlsx
 
 # Python

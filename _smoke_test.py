@@ -501,6 +501,36 @@ check("空表不报错", len(empty_out) == 0)
 nocol_out = classify_return(pd.DataFrame([{"工单号": "X"}]), 5, 90)
 check("缺列不报错", len(nocol_out) == 1)
 
+print("== 14. repeat.relabel_repeat：断点旧标签重判 ==")
+from repeat import relabel_repeat
+
+old_df = pd.DataFrame([
+    # 同 SN 同日两行：旧版本误标为「二返（新故障）」
+    {"工单号": "T1", "SN": "SN-R", "日期": "2026/10/14", "故障描述": "A",
+     "维修详情": "a", "故障类型（一级）": "水泵不良",
+     "类别": "维修（保内）", "处理方式": "更换备件/配件"},
+    {"工单号": "T1", "SN": "SN-R", "日期": "2026/10/14", "故障描述": "B",
+     "维修详情": "b", "故障类型（一级）": "未拖地未吸尘",
+     "类别": "二返（新故障）", "处理方式": "二返（新故障） / 更换整机"},
+    # 首现行（原标签保外）：不应被清空
+    {"工单号": "T9", "SN": "SN-SOLO", "日期": "2026/10/20", "故障描述": "C",
+     "维修详情": "c", "故障类型（一级）": "电池包不良",
+     "类别": "维修（保外）", "处理方式": "补发配件"},
+])
+
+rl_df, rl_n, rl_diff = relabel_repeat(old_df)
+check("重判：同 SN 同日 → 重复", rl_df.iloc[1]["类别"] == "重复")
+check("重判：处理方式同步为「重复 / 更换整机」",
+      rl_df.iloc[1]["处理方式"] == "重复 / 更换整机")
+check("重判：首现行保留原类别（不被清空）",
+      rl_df.iloc[2]["类别"] == "维修（保外）")
+check("重判：修正行数 = 1", rl_n == 1)
+check("重判：修正明细含原/新标签",
+      rl_diff and rl_diff[0]["原标签"] == "二返（新故障）"
+      and rl_diff[0]["新标签"] == "重复")
+_, rl_n2, _ = relabel_repeat(rl_df)
+check("重判幂等", rl_n2 == 0)
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")
