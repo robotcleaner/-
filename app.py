@@ -28,11 +28,7 @@ from return_rate import (
 )
 
 
-st.set_page_config(
-    page_title="维修工单自动处理",
-    page_icon="🔧",
-    layout="wide",
-)
+# 页面配置由入口 main.py 统一设置（多工具共用一个入口时只能设置一次）
 
 st.title("🔧 维修工单自动处理工具")
 st.caption("上传海外维修商原始工单 → 自动翻译 + 分类 + 格式化 → 输出标准化工单")

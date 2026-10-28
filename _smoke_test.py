@@ -561,6 +561,23 @@ check("返修次数聚类：相隔 18 天算 2 次",
       _ce(["2026-10-07", "2026-10-30"], 3) == 2)
 check("返修次数聚类：空值返回 0", _ce([], 3) == 0)
 
+print("== 16. 视频英文化：流水线模块可导入 ==")
+_ven = os.path.join(os.path.dirname(os.path.abspath(__file__)), "video_en")
+if _ven not in sys.path:
+    sys.path.insert(0, _ven)
+import ven_config
+import langs as _ven_langs
+import pipeline as _ven_pipeline
+
+check("视频配置可加载", isinstance(ven_config.load_config(), dict))
+check("目标语言为 en/ja/ko", _ven_langs.ORDER == ("en", "ja", "ko"))
+check("分辨率选项存在", "1280x720" in _ven_pipeline.RESOLUTIONS)
+check("成品文件名可识别（防重复处理）",
+      _ven_pipeline.looks_like_output("a_en.mp4")
+      and not _ven_pipeline.looks_like_output("a.mp4"))
+check("video_en 配置不覆盖工单配置",
+      ven_config.APP_DIR.endswith("video_en"))
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")

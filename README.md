@@ -1,7 +1,13 @@
-# 日韩澳维修工单处理系统
+# 工具集：维修工单处理 + 视频英文化
 
-把海外维修商的原始工单（Excel）自动翻译、分类、标准化，输出统一格式的工单表。
-基于 Streamlit + LLM（硅基流动 DeepSeek-V3）。
+一个网页入口，左侧切换两个工具：
+
+| 工具 | 作用 |
+|---|---|
+| 🔧 工单处理 | 海外维修商原始工单（Excel）自动翻译、分类、标准化 |
+| 🎬 视频英文化 | 中文视频 → 外语字幕 + 配音（ASR / 翻译 / TTS / 烧录） |
+
+启动：`streamlit run main.py`（入口是 `main.py`，不是 `app.py`）
 
 ## 支持区域
 
@@ -41,7 +47,7 @@
 命令行同样可用（原 `2.py` 用法）：
 
 ```bash
-python return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 5 --return-days 90
+python return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 3 --return-days 90
 ```
 
 ## 快速开始
@@ -57,8 +63,11 @@ cp .env.example .env
 # 编辑 .env，填入 SILICONFLOW_API_KEY
 
 # 3. 启动
-streamlit run app.py
+streamlit run main.py
 ```
+
+> 视频工具还需要 **ffmpeg**（`winget install Gyan.FFmpeg` 或放 `video_en/bin/`）。
+> 云端部署时仓库里的 `packages.txt` 会自动装 ffmpeg。
 
 浏览器打开 http://localhost:8501
 
@@ -86,7 +95,7 @@ streamlit run app.py
 想让同事**不用装任何东西**就能用，部署到 Streamlit Community Cloud（免费）：
 
 1. 打开 https://share.streamlit.io ，用 GitHub 账号登录
-2. 点 **New app** → 选仓库 `robotcleaner/-`，Branch 选 `main`，Main file path 填 `app.py`
+2. 点 **New app** → 选仓库 `robotcleaner/-`，Branch 选 `main`，Main file path 填 `main.py`
 3. 点 **Advanced settings** → 在 **Secrets** 里填：
 
    ```toml
@@ -101,6 +110,24 @@ streamlit run app.py
 - 同一实例是共享的，多人**同时**处理时进度文件会互相干扰，建议同一时间一人使用；如需多人并行，可改为「会话隔离」模式。
 - 翻译缓存不纳入仓库，线上首次运行会重新调用接口，产生少量费用。
 - 免费实例闲置一段时间会休眠，首次打开需等十几秒唤醒。
+- **视频工具在云端也能用，但很吃资源**：首次使用会下载识别模型（small 约 500MB），
+  免费实例内存/CPU 有限，建议只处理 1~3 分钟的短视频；长视频请在本机跑。
+- 视频工具的翻译密钥（智谱/百度）请在页面里填，不要写进仓库。
+
+## 视频英文化
+
+页面左侧切到「🎬 视频英文化」：
+
+1. 上传中文视频（mp4 / mov / mkv 等）
+2. 调参数：目标语言（英/日/韩）、字幕模式、识别模型、翻译后端、配音音色、分辨率
+3. 点「开始生成」→ 实时进度 → 完成后在线预览 + 下载成品
+
+处理链路：提取音频 → Whisper 识别中文 → 翻译 → edge-tts 配音并对齐时间轴 →
+生成 ASS 字幕 → ffmpeg 烧录输出。
+
+- 依赖：`ffmpeg`（必需）、`faster-whisper`、`edge-tts`（`pip install -r requirements.txt`）
+- 翻译后端默认 MyMemory（免密钥）；想要质量更好可选智谱 GLM-4-Flash（免费，需 Key）
+- 原桌面版（tkinter，支持多视频剪辑合成）仍保留在 `video_en` 之外的项目里，本仓库只含流水线模块
 
 ## 使用流程
 
@@ -119,7 +146,10 @@ streamlit run app.py
 
 | 文件 | 说明 |
 |---|---|
-| `app.py` | Streamlit 界面与主流程 |
+| `main.py` | **统一入口**（左侧切换两个工具） |
+| `app.py` | 工单处理页面 |
+| `video_page.py` | 视频英文化页面 |
+| `video_en/` | 视频流水线模块（ASR / 翻译 / TTS / 字幕 / ffmpeg） |
 | `processor.py` | 澳洲（AU）处理器 |
 | `processor_kr.py` / `processor_kolon.py` | 韩国 SK / KOLON 处理器 |
 | `processor_jp.py` / `processor_itc.py` | 日本 NGK / ITC 处理器 |

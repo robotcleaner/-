@@ -34,3 +34,12 @@ env/
 *.log
 *.tmp
 ~$*
+
+# 视频英文化：模型 / 输出（体积大，运行时下载）
+video_en/models/
+video_en/output/
+video_en/bin/
+video_en/*.mp4
+
+# 视频工具本地配置（含 API Key）
+video_en/config.json

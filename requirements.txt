@@ -4,3 +4,8 @@ openpyxl>=3.1.0
 openai>=1.30.0
 python-dotenv>=1.0.0
 tenacity>=8.2.0
+# ===== 视频英文化（video_page）=====
+faster-whisper>=1.1.0
+edge-tts>=7.3.0
+deep-translator>=1.11.0
+requests>=2.31.0
