@@ -215,6 +215,12 @@ def normalize_date_jp(val) -> str:
     return d.strftime("%Y/%m/%d") if d else ""
 
 
+def get_ticket_date_itc(row) -> str:
+    """工单日期（原始行口径）：优先发货时间（出荷日），兜底登记时间。"""
+    return (normalize_date_jp(_get_col(row, "出荷日"))
+            or normalize_date_jp(_get_col(row, "発生日時登记时间")))
+
+
 # ==================== 类别 ====================
 def determine_category_itc(warranty: str,
                            complaint_jp: str,

@@ -198,6 +198,11 @@ def normalize_date_kr(val) -> str:
     return d.strftime("%Y/%m/%d") if d else ""
 
 
+def get_ticket_date_kolon(row) -> str:
+    """工单日期（按原始行列名取，供断点文件日期修正使用）。"""
+    return normalize_date_kr(row.get("처리일", ""))
+
+
 # ==================== 类别 ====================
 def determine_category_kolon(warranty: str,
                              complaint_kr: str,

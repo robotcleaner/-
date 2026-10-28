@@ -260,6 +260,11 @@ def normalize_date_jp(val) -> str:
     return d.strftime("%Y/%m/%d") if d else ""
 
 
+def get_ticket_date_jp(row) -> str:
+    """工单日期（按原始行列名取，供断点文件日期修正使用）。"""
+    return normalize_date_jp(_get_col(row, "発生日時/登记时间"))
+
+
 # ==================== 类别 ====================
 def determine_category_jp(solution: str, note: str = "", model: str = "") -> str:
     text = f"{solution} {note}".strip()

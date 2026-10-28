@@ -262,6 +262,54 @@ def normalize_date(val) -> str:
     d = parse_date(val)
     return d.strftime("%Y/%m/%d") if d else ""
 
+# 日期口径：以「Auxiliary Field: Closed Date（关单日期）」为准
+# 兼容全角/半角冒号、列名中间多空格等常见变体
+_CLOSED_DATE_KEYS = (
+    "Auxiliary Field：Closed Date",
+    "Auxiliary Field: Closed Date",
+    "Auxiliary Field：Closed  Date",
+    "Auxiliary Field: Closed  Date",
+    "Date Closed",
+)
+
+
+def _raw_value(row, *names):
+    """按列名从原始行取值；列不存在或值为空则继续找下一个候选。"""
+    index = getattr(row, "index", None)
+    for n in names:
+        if index is not None and n not in index:
+            continue
+        v = row.get(n)
+        if not _is_blank(v):
+            return v
+    return ""
+
+
+def _fuzzy_closed_date(row):
+    """模糊兜底：任意含 closed date 的列（排除 non-repair closed date）。"""
+    index = getattr(row, "index", None)
+    if index is None:
+        return ""
+    for col in index:
+        c = str(col).lower()
+        if "closed" in c and "date" in c and "non-repair" not in c:
+            v = row.get(col)
+            if not _is_blank(v):
+                return v
+    return ""
+
+
+def get_ticket_date(row) -> str:
+    """工单日期：取关单日期（Auxiliary Field: Closed Date）。
+
+    关单日期为空（工单尚未关单）时才兜底创建日期，避免整列空白。
+    """
+    raw = _raw_value(row, *_CLOSED_DATE_KEYS) or _fuzzy_closed_date(row)
+    d = normalize_date(raw)
+    if d:
+        return d
+    return normalize_date(_raw_value(row, "Date Created", "创建日期"))
+
 # ==================== 产品BU ====================
 def get_product_bu(device_name: str) -> str:
     if _is_blank(device_name):
@@ -349,7 +397,7 @@ def process_row(row: pd.Series) -> dict:
     out["代理"] = FIXED_AGENT
     out["型号"] = normalize_model(out.get("设备名称", ""))
     out["产品BU"] = get_product_bu(out.get("设备名称", ""))
-    out["日期"] = normalize_date(out.get("关单日期", ""))
+    out["日期"] = get_ticket_date(row)
     out["SN"] = out.get("SN", "")
 
     # 注意：COLUMN_MAP 已把原始列名改写为标准字段名（如
@@ -471,7 +519,7 @@ def process_row(row: pd.Series) -> dict:
 # 返修判定使用的原始列（SN + 日期 + 描述 + 维修详情）
 _REPEAT_COLS = {
     "sn": "Serial Number",
-    "date": "Date Created",
+    "date": "Auxiliary Field：Closed Date",   # 与输出「日期」同源（关单日期）
     "desc": "Customer Complaint",
     "detail": "Repair Details (Technician Notes)",
 }
@@ -493,7 +541,7 @@ def process_dataframe(df: pd.DataFrame,
     records = [
         {"pos": pos,
          "sn": row.get(_REPEAT_COLS["sn"], ""),
-         "date": row.get(_REPEAT_COLS["date"], ""),
+         "date": get_ticket_date(row),
          "desc": row.get(_REPEAT_COLS["desc"], ""),
          "detail": row.get(_REPEAT_COLS["detail"], "")}
         for pos, (_, row) in enumerate(rows_snapshot)

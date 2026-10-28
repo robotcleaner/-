@@ -203,6 +203,11 @@ def normalize_date_kr(val) -> str:
     return d.strftime("%Y/%m/%d") if d else ""
 
 
+def get_ticket_date_kr(row) -> str:
+    """工单日期（按原始行列名取，供断点文件日期修正使用）。"""
+    return normalize_date_kr(row.get("최종처리일", ""))
+
+
 # ==================== 类别（韩国） ====================
 # NFF 触发词
 KR_NFF_TEXT_KEYWORDS = [

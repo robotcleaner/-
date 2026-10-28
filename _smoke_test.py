@@ -311,6 +311,66 @@ check("ITC 发货时间为空兜底登记时间", itc_out.iloc[1]["日期"] == "
 check("ITC 同 SN 不同发货日期 → 二返", itc_out.iloc[3]["类别"].startswith("二返"))
 check("ITC 首现行保留原类别", itc_out.iloc[0]["类别"] == "维修（保内）")
 
+print("== 10. processor（AU）：日期取 Auxiliary Field: Closed Date ==")
+row_full = pd.Series({
+    "Ticket Number": "T1",
+    "Date Created": "18/09/2026, 10:10:39 am",
+    "Auxiliary Field：Closed Date": "2026/10/06",
+})
+check("AU 日期取关单日期（全角冒号）", P.get_ticket_date(row_full) == "2026/10/06")
+
+row_half = pd.Series({
+    "Date Created": "18/09/2026, 10:10:39 am",
+    "Auxiliary Field: Closed Date": "2026/10/07",
+})
+check("AU 日期取关单日期（半角冒号）", P.get_ticket_date(row_half) == "2026/10/07")
+
+row_open = pd.Series({
+    "Date Created": "18/09/2026, 10:10:39 am",
+    "Auxiliary Field：Closed Date": "",
+})
+check("AU 关单日期为空兜底创建日期", P.get_ticket_date(row_open) == "2026/09/18")
+
+au_row = pd.Series({
+    "Ticket Number": "T2",
+    "Serial Number": "SN-Z",
+    "Device Name": "DREAME - L40 Ultra",
+    "Customer Complaint": "battery not charging",
+    "Date Created": "18/09/2026, 10:10:39 am",
+    "Date Purchased": "01/01/2026",
+    "Auxiliary Field：Closed Date": "2026/10/06",
+    "Repair Details (Technician Notes)": "replaced battery",
+    "Type of Service": "service",
+})
+au_out = P.process_row(au_row)
+check("AU 端到端：日期列 = 关单日期（非创建日期）",
+      au_out["日期"] == "2026/10/06")
+
+print("== 11. date_refresh：断点文件旧日期修正 ==")
+from date_refresh import refresh_partial_dates, write_partial
+
+raw_df = pd.DataFrame([
+    {"Ticket Number": "T1", "Auxiliary Field：Closed Date": "2026/10/06",
+     "Date Created": "18/09/2026"},
+    {"Ticket Number": "T3", "Auxiliary Field：Closed Date": "2026/10/08",
+     "Date Created": "20/09/2026"},
+])
+partial_df = pd.DataFrame([
+    {"工单号": "T1", "日期": "2026/09/18"},   # 旧口径：创建日期
+    {"工单号": "TX", "日期": "2026/09/19"},   # 源表中不存在
+])
+fixed_df, n_fixed = refresh_partial_dates(partial_df, raw_df, "澳洲（PAU）")
+check("断点行日期修正为关单日期", fixed_df.iloc[0]["日期"] == "2026/10/06")
+check("源表未匹配的行保持原值", fixed_df.iloc[1]["日期"] == "2026/09/19")
+check("修正行数统计正确", n_fixed == 1)
+
+again_df, n_again = refresh_partial_dates(fixed_df, raw_df, "澳洲（PAU）")
+check("日期修正幂等（重复执行不再变动）", n_again == 0 and again_df.iloc[0]["日期"] == "2026/10/06")
+
+tmp_csv = os.path.join(d, "partial_test.csv")
+check("修正结果可写回断点文件",
+      write_partial(fixed_df, tmp_csv) and os.path.exists(tmp_csv))
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")

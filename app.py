@@ -150,6 +150,20 @@ if uploaded is not None:
         partial_df = None
         done_ids = set()
 
+    # ========== 日期口径修正 ==========
+    # 断点文件里的旧行可能用的是旧日期来源（如澳洲曾用创建日期）。
+    # 这里按当前口径从本次上传的源表重新取一次，按工单号回填，零成本。
+    if partial_df is not None and len(partial_df) > 0:
+        try:
+            from date_refresh import refresh_partial_dates, write_partial
+            partial_df, fixed = refresh_partial_dates(partial_df, df_raw, region)
+            if fixed:
+                st.warning(f"🔧 已按当前日期口径修正断点文件中 {fixed} 行的日期")
+                if write_partial(partial_df, partial_path):
+                    st.caption("已同步写回断点文件")
+        except Exception as e:
+            st.caption(f"日期口径修正跳过：{e}")
+
     # ========== 往批历史（用于 重复 / 二返 / 三返 判定）==========
     # 断点文件里是已处理完的标准化行：其 SN + 日期 可作为"该 SN 之前
     # 是否出现过"的历史依据；故障类型（一级）用于对比是否「重现」。
