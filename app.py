@@ -27,6 +27,22 @@ from return_rate import (
     MARK_COL, RELATED_COL,
 )
 
+# 重点产品故障 TOP3（导出 Excel 的 sheet2）
+from key_products import (
+    build_key_products, write_excel_with_key_sheet, summarize_key_products,
+    KEY_SHEET_NAME, KEY_COLUMNS, DEFAULT_TOP_MODELS, DEFAULT_TOP_FAULTS,
+)
+
+
+def _kp_opts():
+    """读取「重点产品 TOP3」的 N 配置（界面可调，预览与导出共用）。"""
+    try:
+        n_models = int(st.session_state.get("kp_top_models", DEFAULT_TOP_MODELS))
+        n_faults = int(st.session_state.get("kp_top_faults", DEFAULT_TOP_FAULTS))
+    except Exception:
+        n_models, n_faults = DEFAULT_TOP_MODELS, DEFAULT_TOP_FAULTS
+    return max(1, n_models), max(1, n_faults)
+
 
 # 页面配置由入口 main.py 统一设置（多工具共用一个入口时只能设置一次）
 
@@ -110,6 +126,7 @@ uploaded = st.file_uploader(
     accept_multiple_files=False,
 )
 
+partial_df = None   # 已处理结果（断点文件）；未上传工单时保持 None
 if uploaded is not None:
     # 读文件
     try:
@@ -229,14 +246,18 @@ if uploaded is not None:
         if partial_df is not None and len(partial_df) > 0:
             export_df = partial_df[[c for c in OUTPUT_COLUMNS if c in partial_df.columns]]
             buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                export_df.to_excel(writer, index=False, sheet_name="已处理")
+            _n_models, _n_faults = _kp_opts()
+            write_excel_with_key_sheet(
+                export_df, buffer, main_sheet="已处理",
+                top_models=_n_models, top_faults=_n_faults,
+            )
             buffer.seek(0)
             st.download_button(
                 label=f"📥 导出已处理部分（{len(export_df)} 条）",
                 data=buffer,
                 file_name="已处理部分.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help=f"含第 2 个 sheet「{KEY_SHEET_NAME}」：重点产品故障 TOP{_n_faults} 及占比",
             )
 
     if st.session_state.processing:
@@ -289,8 +310,11 @@ if uploaded is not None:
                 all_df = pd.read_csv(PARTIAL_FILE, encoding="utf-8-sig", on_bad_lines='skip')
                 all_df = all_df[[c for c in OUTPUT_COLUMNS if c in all_df.columns]]
                 buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                    all_df.to_excel(writer, index=False, sheet_name="优化后工单")
+                _n_models, _n_faults = _kp_opts()
+                write_excel_with_key_sheet(
+                    all_df, buffer, main_sheet="优化后工单",
+                    top_models=_n_models, top_faults=_n_faults,
+                )
                 buffer.seek(0)
                 st.download_button(
                     label=f"📥 下载全部已处理（{len(all_df)} 条）",
@@ -298,10 +322,66 @@ if uploaded is not None:
                     file_name="优化后工单.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary",
+                    help=f"含第 2 个 sheet「{KEY_SHEET_NAME}」：重点产品故障 TOP{_n_faults} 及占比",
                 )
         except Exception as e:
             st.session_state.processing = False
             st.error(f"处理中断：{e}")
+
+# ==================== 重点产品故障 TOP3（导出 sheet2 预览）====================
+if partial_df is not None and len(partial_df) > 0:
+    st.divider()
+    st.header("🏆 重点产品故障 TOP3")
+    st.caption(
+        f"按 BU 汇总重点型号的故障数量，并列出每个型号的 TOP 故障类型及占比。"
+        f"下载工单时该内容会自动写入 Excel 的第 2 个 sheet「{KEY_SHEET_NAME}」。"
+    )
+
+    _c1, _c2 = st.columns(2)
+    st.session_state.setdefault("kp_top_models", DEFAULT_TOP_MODELS)
+    st.session_state.setdefault("kp_top_faults", DEFAULT_TOP_FAULTS)
+    with _c1:
+        st.number_input(
+            "每个 BU 取故障数前 N 个型号",
+            min_value=1, max_value=20, step=1, key="kp_top_models",
+        )
+    with _c2:
+        st.number_input(
+            "每个型号列前 N 个故障类型",
+            min_value=1, max_value=10, step=1, key="kp_top_faults",
+        )
+
+    key_df = build_key_products(
+        partial_df,
+        top_models=int(st.session_state.get("kp_top_models", DEFAULT_TOP_MODELS)),
+        top_faults=int(st.session_state.get("kp_top_faults", DEFAULT_TOP_FAULTS)),
+    )
+
+    if len(key_df) == 0:
+        st.warning("当前数据缺少「型号」字段，无法生成重点产品统计。")
+    else:
+        _sum = summarize_key_products(key_df)
+        _m1, _m2, _m3 = st.columns(3)
+        _m1.metric("覆盖 BU", _sum["bus"])
+        _m2.metric("重点型号数", _sum["models"])
+        _m3.metric("这些型号的故障合计", _sum["total"])
+
+        _view = key_df.copy()
+        _view["占比"] = _view["占比"].map(lambda x: f"{x:.0%}")
+        st.dataframe(_view, width="stretch", height=460)
+
+        _buf = io.BytesIO()
+        write_excel_with_key_sheet(
+            partial_df[[c for c in OUTPUT_COLUMNS if c in partial_df.columns]],
+            _buf, main_sheet="已处理", key_df=key_df,
+        )
+        _buf.seek(0)
+        st.download_button(
+            f"📥 下载「{KEY_SHEET_NAME}」表（含工单明细）",
+            data=_buf,
+            file_name=f"{KEY_SHEET_NAME}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 # ==================== 二返率统计（独立分析）====================
 st.divider()

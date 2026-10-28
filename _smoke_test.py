@@ -578,6 +578,86 @@ check("成品文件名可识别（防重复处理）",
 check("video_en 配置不覆盖工单配置",
       ven_config.APP_DIR.endswith("video_en"))
 
+print("== 17. key_products：重点产品故障 TOP3（导出 sheet2）==")
+import io as _io
+import pandas as _pd
+import openpyxl as _opx
+from key_products import (
+    build_key_products, write_excel_with_key_sheet, summarize_key_products,
+    KEY_SHEET_NAME, KEY_COLUMNS,
+)
+
+# 造数据：扫地机 2 个型号（X50 4 条 / X40 2 条），洗地机 1 个型号（H12 2 条）
+_kp_raw = _pd.DataFrame([
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "拖布电机不良"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "拖布电机不良"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "LDS组件不良"},
+    {"产品BU": "扫地机", "型号": "X50 Ultra", "故障类型（一级）": "未发现故障"},
+    {"产品BU": "扫地机", "型号": "X40 Ultra", "故障类型（一级）": "主板不良"},
+    {"产品BU": "扫地机", "型号": "X40 Ultra", "故障类型（一级）": "主板不良"},
+    {"产品BU": "洗地机", "型号": "H12 Pro", "故障类型（一级）": "清水箱不良"},
+    {"产品BU": "洗地机", "型号": "H12 Pro", "故障类型（一级）": "电池包不良"},
+])
+_kdf = build_key_products(_kp_raw, top_models=5, top_faults=3)
+
+check("列名与参考表一致",
+      list(_kdf.columns) == ["类别", "型号", "故障数量", "占比", "TOP故障类型（单机型占比）"])
+check("BU 按故障总量降序（扫地机在前）", list(_kdf["类别"])[:2] == ["扫地机", "扫地机"])
+check("型号按故障数降序", list(_kdf["型号"])[:2] == ["X50 Ultra", "X40 Ultra"])
+check("故障数量取该型号全部工单数", int(_kdf.iloc[0]["故障数量"]) == 4)
+check("占比 = 型号数 ÷ 该 BU 总数（4/6）", abs(float(_kdf.iloc[0]["占比"]) - 4 / 6) < 1e-9)
+check("占比 = 型号数 ÷ 该 BU 总数（2/6）", abs(float(_kdf.iloc[1]["占比"]) - 2 / 6) < 1e-9)
+check("单 BU 只有 1 个型号时占比 100%", abs(float(_kdf.iloc[2]["占比"]) - 1.0) < 1e-9)
+
+_top0 = _kdf.iloc[0]["TOP故障类型（单机型占比）"]
+check("TOP 文本格式：1.类型--50%（2/4）", _top0.split("\n")[0] == "1.拖布电机不良--50%")
+check("TOP 文本用换行分隔", "\n" in _top0)
+check("未发现故障不参与 TOP 排名", "未发现故障" not in _top0)
+check("TOP 条数不超过 top_faults",
+      all(len(str(x).split("\n")) <= 2 for x in _kdf["TOP故障类型（单机型占比）"]))
+check("不足 3 条时只列实际条数", len(_kdf.iloc[1]["TOP故障类型（单机型占比）"].split("\n")) == 1)
+
+_kdf1 = build_key_products(_kp_raw, top_models=1, top_faults=1)
+check("top_models=1 时每 BU 只留 1 个型号", len(_kdf1) == 2)
+
+# 型号大小写/空格写法差异应合并；BU 缺失时按型号前缀推断
+_kp_raw2 = _pd.DataFrame([
+    {"产品BU": "", "型号": "x50  ultra", "故障类型（一级）": "拖布电机不良"},
+    {"产品BU": "", "型号": "X50 Ultra", "故障类型（一级）": "拖布电机不良"},
+    {"产品BU": "", "型号": "H12 Pro", "故障类型（一级）": "清水箱不良"},
+])
+_kdf2 = build_key_products(_kp_raw2, top_models=5, top_faults=3)
+check("型号写法差异合并为一行", len(_kdf2) == 2)
+check("BU 缺失时按型号前缀推断", set(_kdf2["类别"]) == {"扫地机", "洗地机"})
+check("合并后数量为 2", int(_kdf2.iloc[0]["故障数量"]) == 2)
+
+check("空表返回齐全的列", list(build_key_products(_pd.DataFrame()).columns) == KEY_COLUMNS)
+check("摘要统计正确",
+      summarize_key_products(_kdf)["models"] == 3
+      and summarize_key_products(_kdf)["bus"] == 2)
+
+# 写出 Excel：sheet1 明细 + sheet2 重点产品
+_buf = _io.BytesIO()
+write_excel_with_key_sheet(_kp_raw, _buf, main_sheet="已处理", key_df=_kdf)
+_buf.seek(0)
+_wb = _opx.load_workbook(_buf)
+check("导出含 2 个 sheet", _wb.sheetnames == ["已处理", KEY_SHEET_NAME])
+_ws = _wb[KEY_SHEET_NAME]
+check("sheet2 表头正确",
+      [_ws.cell(1, c).value for c in range(1, 6)] == KEY_COLUMNS)
+check("占比列写入小数 + 0% 格式",
+      _ws.cell(2, 4).number_format == "0%"
+      and abs(float(_ws.cell(2, 4).value) - 4 / 6) < 1e-9)
+check("A 列按 BU 合并", any(str(m) == "A2:A3" for m in _ws.merged_cells.ranges))
+check("E 列开启自动换行", _ws.cell(2, 5).alignment.wrap_text is True)
+check("表头加粗 + 蓝底", _ws.cell(1, 1).font.bold is True)
+
+_buf2 = _io.BytesIO()
+write_excel_with_key_sheet(_kp_raw, _buf2, main_sheet="已处理", add_key_sheet=False)
+_buf2.seek(0)
+check("add_key_sheet=False 只写主表",
+      _opx.load_workbook(_buf2).sheetnames == ["已处理"])
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")
