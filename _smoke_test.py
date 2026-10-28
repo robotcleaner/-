@@ -373,7 +373,7 @@ check("修正结果可写回断点文件",
 
 print("== 12. return_rate：二返率计算（移植自 2.py）==")
 from return_rate import (classify_return, calc_return_rate, build_detail,
-                         summarize, MARK_COL)
+                         summarize, mark_breakdown, MARK_COL)
 
 rr_src = pd.DataFrame([
     # SN-A：完全重复（同日期同描述同维修）
@@ -425,6 +425,21 @@ check("型号统计：返修率 50%", float(row_x50["返修率(%)"]) == 50.0)
 detail = build_detail(rr)
 check("明细报告只含被标记行（4 条）", len(detail) == 4)
 check("明细报告带关联工单号列", "关联工单号" in detail.columns)
+check("明细报告：重复归组排在最前",
+      detail[MARK_COL].tolist()[0] == "重复"
+      and detail[MARK_COL].tolist()[1] == "重复")
+check("明细报告：返修按 二返 → 三返 递增归组",
+      detail[MARK_COL].tolist()[2].startswith("二返")
+      and detail[MARK_COL].tolist()[3] == "三返")
+
+bd = mark_breakdown(rr)
+bd_map = dict(zip(bd[MARK_COL], bd["工单数"]))
+check("标记分布表：重复 2 条", int(bd_map.get("重复", 0)) == 2)
+check("标记分布表：二返（故障重现）1 条",
+      int(bd_map.get("二返（故障重现）", 0)) == 1)
+check("标记分布表：三返 1 条", int(bd_map.get("三返", 0)) == 1)
+check("标记分布表：占比合计与标记总数一致",
+      int(bd["工单数"].sum()) == 4)
 
 # 窗口可调：重复窗口 0 天 → 3 天间隔不再算重复，改判二返
 rr0 = classify_return(rr_src, dup_window_days=0, return_window_days=90)

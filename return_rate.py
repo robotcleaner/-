@@ -244,16 +244,49 @@ def calc_return_rate(df_result: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_detail(df_result: pd.DataFrame) -> pd.DataFrame:
-    """仅保留被标记为 重复/二返/三返… 的明细行。"""
+    """仅保留被标记为 重复/二返/三返… 的明细行。
+
+    排序：先按标记归组（重复 → 二返 → 三返 → …），组内按 SN + 日期，
+    这样「重复」不会被混在二返里看不见。
+    """
     if MARK_COL not in df_result.columns:
         return df_result.head(0)
     marked = df_result[df_result[MARK_COL].fillna("").astype(str) != ""].copy()
+    mark = marked[MARK_COL].fillna("").astype(str)
+
+    # 组序：重复 0；二返 1；三返 2；四返 3 …（按「返」前的汉字次数不好推，
+    # 直接用出现顺序：重复最前，其余按标记文本稳定排序）
+    marked["_grp"] = mark.map(lambda m: 0 if m == "重复" else 1)
+    marked["_ord"] = mark.map(
+        lambda m: {"重复": 0, "二返": 2, "三返": 3, "四返": 4,
+                   "五返": 5, "六返": 6}.get(m[:2], 9))
+
     cols = [COL_TICKET, "区域", "代理", COL_MODEL, "产品BU", COL_DATE, COL_SN,
             COL_FAULT, COL_DESC, COL_DETAIL, COL_METHOD, MARK_COL, RELATED_COL]
     cols = [c for c in cols if c in marked.columns]
-    if COL_SN in marked.columns and COL_DATE in marked.columns:
-        marked = marked.sort_values([COL_SN, COL_DATE])
-    return marked[cols]
+
+    sort_keys = ["_grp", "_ord"]
+    if COL_SN in marked.columns:
+        sort_keys.append(COL_SN)
+    if COL_DATE in marked.columns:
+        sort_keys.append(COL_DATE)
+    marked = marked.sort_values(sort_keys, kind="stable")
+    return marked[cols].reset_index(drop=True)
+
+
+def mark_breakdown(df_result: pd.DataFrame) -> pd.DataFrame:
+    """标记分布小表（重复 / 二返 / 三返 … 各多少条）。"""
+    if MARK_COL not in df_result.columns:
+        return pd.DataFrame(columns=[MARK_COL, "工单数", "占比(%)"])
+    mark = df_result[MARK_COL].fillna("").astype(str)
+    marked = mark[mark != ""]
+    if marked.empty:
+        return pd.DataFrame(columns=[MARK_COL, "工单数", "占比(%)"])
+    total = len(df_result)
+    out = (marked.value_counts().rename_axis(MARK_COL)
+           .reset_index(name="工单数"))
+    out["占比(%)"] = (out["工单数"] / total * 100).round(2)
+    return out
 
 
 def summarize(df_result: pd.DataFrame) -> dict:

@@ -23,7 +23,7 @@ from config_itc import OUTPUT_COLUMNS_ITC
 
 # 二返率统计（移植自「二返率计算/2.py」）
 from return_rate import (
-    classify_return, calc_return_rate, build_detail, summarize,
+    classify_return, calc_return_rate, build_detail, summarize, mark_breakdown,
     MARK_COL, RELATED_COL,
 )
 
@@ -358,12 +358,35 @@ if df_rate is not None and len(df_rate) > 0:
         detail_df = build_detail(rr)
         rate_df = calc_return_rate(rr)
         full_df = rr.drop(columns=[MARK_COL, RELATED_COL], errors="ignore")
+        breakdown = mark_breakdown(rr)
 
         tab_detail, tab_rate, tab_all = st.tabs(
             ["📋 明细报告", "📈 型号二返率", "🗂 全量结果"])
         with tab_detail:
-            st.caption(f"被标记为 重复 / 二返 / 三返 的工单：{len(detail_df)} 条")
-            st.dataframe(detail_df, use_container_width=True, height=420)
+            n_dup = int((detail_df[MARK_COL].astype(str) == "重复").sum()) \
+                if MARK_COL in detail_df.columns else 0
+            n_ret = len(detail_df) - n_dup
+            st.caption(
+                f"被标记的工单共 **{len(detail_df)}** 条"
+                f"（重复 {n_dup} 条 / 返修 {n_ret} 条）。"
+                "「重复」排在最前，其后按 二返 → 三返 → … 归组。"
+            )
+
+            if len(breakdown):
+                bd_cols = st.columns(max(len(breakdown), 1))
+                for i, (_, r) in enumerate(breakdown.iterrows()):
+                    bd_cols[i].metric(str(r[MARK_COL]), f'{int(r["工单数"])} 条')
+
+            sel = st.radio(
+                "筛选", ["全部", "仅重复", "仅二返", "仅三返"],
+                horizontal=True, key="rate_detail_filter",
+            )
+            view = detail_df
+            if MARK_COL in detail_df.columns and sel != "全部":
+                key = {"仅重复": "重复", "仅二返": "二返", "仅三返": "三返"}[sel]
+                view = detail_df[
+                    detail_df[MARK_COL].astype(str).str.startswith(key)]
+            st.dataframe(view, use_container_width=True, height=420)
         with tab_rate:
             st.dataframe(rate_df, use_container_width=True, height=420)
         with tab_all:
