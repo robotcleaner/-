@@ -175,7 +175,7 @@ if uploaded is not None:
             if fixed_label:
                 st.warning(
                     f"🔧 已按当前规则重判 {fixed_label} 行的返修标签"
-                    "（同 SN 同日 → 重复；异日 → 二返/三返）"
+                    "（同 SN 3 天内 → 重复；超过 3 天 → 二返/三返）"
                 )
                 with st.expander("查看标签修正明细", expanded=False):
                     st.dataframe(pd.DataFrame(label_diff),
@@ -312,7 +312,7 @@ st.divider()
 st.header("📊 二返率统计")
 st.caption(
     "对已处理结果按 SN + 日期重新判定 重复 / 二返 / 三返，并统计型号维度二返率。"
-    "（与处理阶段的「类别」列独立，窗口可调）"
+    "（默认 3 天窗口，与工单处理规则一致；窗口可调）"
 )
 
 rate_src = st.radio(
@@ -350,8 +350,8 @@ else:
 if df_rate is not None and len(df_rate) > 0:
     c1, c2, c3 = st.columns([1, 1, 1.4])
     dup_days = c1.number_input(
-        "重复判定窗口（天）", min_value=0, max_value=60, value=5, step=1,
-        help="同 SN 日期间隔 ≤ 该值视为重复；填 0 表示仅同日算重复")
+        "重复判定窗口（天）", min_value=0, max_value=60, value=3, step=1,
+        help="同 SN 日期间隔 ≤ 该值视为重复（默认 3 天，与工单处理规则一致）；填 0 表示仅同日算重复")
     ret_days = c2.number_input(
         "返修判定窗口（天）", min_value=7, max_value=730, value=90, step=1,
         help="向前回看多少天内的同 SN 历史工单")

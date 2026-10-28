@@ -5,10 +5,10 @@
 按 SN 聚合整批工单（可叠加往批历史），判定每行的「返修类别」：
 
 - 首次出现的 SN              → 不打标（保留原类别）
-- SN + 日期 均相同           → 「重复」
-    （描述 + 维修详情相似度 ≥ 70% 记为完全重复 A，否则为同日重复 D，
-      类别同为「重复」）
-- SN 相同、日期不同          → 第 2 个日期 → 「二返」，第 3 个及以后 → 「三返」
+- SN 相同、日期间隔 ≤ 3 天    → 「重复」
+    （描述 + 维修详情相似度 ≥ 70% 记为完全重复 A，否则记为重复 D，
+      类别同为「重复」；窗口天数由 dup_window_days 控制，默认 3 天）
+- SN 相同、日期间隔 > 3 天    → 第 2 次 → 「二返」，第 3 次及以后 → 「三返」
     与上一次返修的故障类型一致 → 「（重现）」，不一致 → 「（新故障）」
 
 并发流式处理下的设计（配合 run_batch）：
@@ -25,6 +25,38 @@ import threading
 from difflib import SequenceMatcher
 
 SIM_THRESHOLD = 0.7
+
+# 「重复」判定窗口：同 SN 且日期间隔 ≤ 该天数 → 重复（默认 3 天）
+DUP_WINDOW_DAYS = 3
+
+
+def days_between(d1: str, d2: str):
+    """两个 'YYYY-MM-DD' 之间相差的天数（绝对值）；无法解析返回 None。"""
+    from datetime import date as _date
+    try:
+        a = _date.fromisoformat(str(d1)[:10])
+        b = _date.fromisoformat(str(d2)[:10])
+    except Exception:
+        return None
+    return abs((a - b).days)
+
+
+def count_episodes(dates, window: int = DUP_WINDOW_DAYS) -> int:
+    """把历史日期聚成「返修次数」：间隔 ≤ window 的连续日期算同一次。
+
+    例：窗口 3 天，历史日期 10/07、10/10、10/12 → 1 次（都是重复）
+        再加 10/30 → 2 次（第 2 次返修）
+    """
+    ds = sorted({str(d)[:10] for d in dates if d})
+    if not ds:
+        return 0
+    episodes, prev = 1, ds[0]
+    for d in ds[1:]:
+        gap = days_between(prev, d)
+        if gap is None or gap > window:
+            episodes += 1
+        prev = d
+    return episodes
 
 
 def normalize_sn(sn) -> str:
@@ -66,15 +98,18 @@ def _sim(a: str, b: str) -> float:
 class RepeatClassifier:
     """返修分类器：预扫描生成结构标签，处理阶段补故障对比后缀。"""
 
-    def __init__(self, history=None, sim_threshold: float = SIM_THRESHOLD):
+    def __init__(self, history=None, sim_threshold: float = SIM_THRESHOLD,
+                 dup_window_days: int = DUP_WINDOW_DAYS):
         """
         参数
         ----
         history : list[dict]，往批已处理行，键为
                   sn / date / desc / detail / fault（desc/detail 可省）
         sim_threshold : float，「完全重复」的相似度阈值（默认 0.7）
+        dup_window_days : int，同 SN 日期间隔 ≤ 该天数即视为「重复」（默认 3 天）
         """
         self.threshold = sim_threshold
+        self.dup_window = max(int(dup_window_days or 0), 0)
         self._by_sn = {}
         self._lock = threading.Lock()
         for rec in (history or []):
@@ -105,7 +140,7 @@ class RepeatClassifier:
             'label':      None | '重复' | '二返' | '三返',
             'pred_pos':   前驱行在本批的 pos（前驱为历史行则 None），
             'pred_fault': 前驱行的故障类型（前驱为历史行时已知，否则 None），
-            'case':       'A' | 'D' | None（完全重复 / 同日重复，仅供分析），
+            'case':       'A' | 'D' | None（完全重复 / 窗口内重复，仅供分析），
         }}
         """
         plan = {}
@@ -131,13 +166,18 @@ class RepeatClassifier:
                 continue
 
             preds = self._by_sn.get(sn, []) + batch.get(sn, [])
-            same_date = [p for p in preds if p["date"] == date]
+            # 同 SN 且日期间隔 ≤ dup_window → 重复（默认 3 天内）
+            within = [
+                p for p in preds
+                if (g := days_between(p["date"], date)) is not None
+                and g <= self.dup_window
+            ]
 
-            if same_date:
-                # —— A / D：SN + 日期相同 ——
+            if within:
+                # —— A / D：SN 相同、日期在窗口内 ——
                 best = max(_sim(desc + "\n" + detail,
                                 p["desc"] + "\n" + p["detail"])
-                           for p in same_date)
+                           for p in within)
                 plan[pos] = {
                     "label": "重复",
                     "pred_pos": None,
@@ -145,11 +185,14 @@ class RepeatClassifier:
                     "case": "A" if best >= self.threshold else "D",
                 }
             elif preds:
-                # —— B / C：SN 相同、日期不同 ——
+                # —— B / C：SN 相同、日期超出窗口 ——
                 pred = sorted(preds, key=lambda p: p["date"])[-1]
-                distinct_dates = len({p["date"] for p in preds} | {date})
+                # 只统计超出窗口的历史日期，并按窗口聚成「返修次数」
+                # （窗口内的重复不单独计一次返修）
+                prior_dates = {p["date"] for p in preds}
+                return_no = count_episodes(prior_dates, self.dup_window) + 1
                 plan[pos] = {
-                    "label": "三返" if distinct_dates >= 3 else "二返",
+                    "label": "三返" if return_no >= 3 else "二返",
                     "pred_pos": pred["pos"],
                     "pred_fault": pred["fault"] if pred["pos"] is None else None,
                     "case": None,
@@ -290,12 +333,12 @@ def relabel_repeat(df, label_col: str = "类别", method_col: str = "处理方�
                    fault_col: str = "故障类型（一级）"):
     """用当前规则重判已有结果里的返修标签（纯本地计算，不调 LLM）。
 
-    背景：断点文件是多次运行累积的，早期版本（没有「同 SN 同日 → 重复」规则）
+    背景：断点文件是多次运行累积的，早期版本（没有「3 天内同 SN → 重复」规则）
     留下的标签会一直保留，导致本该是「重复」的单显示成「二返」。
 
     规则与处理阶段完全一致：
-      - 同 SN + 同日期                    → 重复
-      - 同 SN + 不同日期，第 2/3+ 个日期   → 二返 / 三返
+      - 同 SN + 日期间隔 ≤ 3 天            → 重复
+      - 同 SN + 日期间隔 > 3 天，第 2/3+ 次 → 二返 / 三返
         与前驱故障类型一致 →（重现），否则（新故障）
 
     保守策略：新规则判定为「首现」（无标签）时**保留原值**，避免把基类

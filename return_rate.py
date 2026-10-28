@@ -2,20 +2,20 @@
 """二返率计算（移植自「二返率计算/2.py」）。
 
 与处理阶段的 RepeatClassifier 的区别：
-- RepeatClassifier 用于**生成**类别列（同 SN 同日 → 重复；异日第 2/3 次 → 二返/三返）；
+- RepeatClassifier 用于**生成**类别列（同 SN 3 天内 → 重复；超过 3 天第 2/3 次 → 二返/三返）；
 - 本模块用于**事后统计**：对已处理结果按 SN + 日期重新判定
   重复 / 二返 / 三返，并输出型号维度的二返率。
 
 判定规则（按优先级）：
 1. 完全重复：同 SN、同日期、同故障描述、同维修详情 → 重复
-2. 窗口内重复：同 SN，日期间隔 ≤ dup_window_days（默认 5 天）→ 重复
+2. 窗口内重复：同 SN，日期间隔 ≤ dup_window_days（默认 3 天）→ 重复
 3. 返修：同 SN，历史日期在 return_window_days（默认 90 天）内且间隔 > dup_window_days
    → 二返 / 三返 / 四返…；故障类型与历史一致时加「（故障重现）」
 4. 其余：不标记
 
 命令行用法（保持原脚本习惯）：
     python return_rate.py 已处理工单.xlsx
-    python return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 5 --return-days 90
+    python return_rate.py 已处理工单.xlsx -o 输出目录 --dup-days 3 --return-days 90
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from repeat import merge_method
+from repeat import merge_method, count_episodes
 
 # 判定用到的标准列
 COL_SN = "SN"
@@ -91,7 +91,7 @@ def _s(val) -> str:
 
 # ==================== 分类 ====================
 def classify_return(df: pd.DataFrame,
-                    dup_window_days: int = 5,
+                    dup_window_days: int = 3,
                     return_window_days: int = 90,
                     method_mode: str = "append",
                     overwrite_method: bool | None = None) -> pd.DataFrame:
@@ -189,7 +189,10 @@ def classify_return(df: pd.DataFrame,
             if dup_tickets:
                 related[pos] = " / ".join(dict.fromkeys(dup_tickets))
         elif len(prior_dates_for_return) >= 1:
-            return_no = len(prior_dates_for_return) + 1
+            # 按窗口聚成「返修次数」：3 天内的重复不单独计一次
+            return_no = count_episodes(prior_dates_for_return,
+                                       dup_window_days) + 1
+            return_no = min(return_no, 3)   # 与工单规则一致：最多到三返
             label = _CN_NUM.get(return_no - 1, f"第{return_no}次")
             prior_faults = {
                 r["fault_type"] for r in prior_in_window
@@ -339,8 +342,8 @@ def main():
     )
     parser.add_argument("input", nargs="?", default=None, help="已处理工单 xlsx/csv")
     parser.add_argument("-o", "--output-dir", default=".", help="输出目录")
-    parser.add_argument("--dup-days", type=int, default=5,
-                        help="重复判定窗口天数（默认 5）")
+    parser.add_argument("--dup-days", type=int, default=3,
+                        help="重复判定窗口天数（默认 3）")
     parser.add_argument("--return-days", type=int, default=90,
                         help="返修判定窗口天数（默认 90）")
     parser.add_argument("--method-mode", default="append",

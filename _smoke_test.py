@@ -113,7 +113,7 @@ check("输出列与配置一致", list(out1.columns) == P.OUTPUT_COLUMNS)
 check("工单号保留", list(out1["工单号"]) == ["T1", "T2", "T3", "T4", "T5"])
 check("SKU 纯编码命中", out1.iloc[0]["故障类型（一级）"] == "电池包不良")
 check("备件消耗透传", out1.iloc[0]["备件消耗"] == "20020100009132 - Battery")
-check("同 SN 不同日期 → 二返（新故障）", out1.iloc[1]["类别"] == "二返（新故障）")
+check("同 SN 相隔 1 天 → 重复（3 天窗口）", out1.iloc[1]["类别"] == "重复")
 check("投诉关键词命中", out1.iloc[1]["故障类型（一级）"] == "拖布电机不良")
 check("NFF 识别（技师备注）", out1.iloc[2]["类别"] == "无异常（NFF）")
 check("维修详情已填充", out1.iloc[2]["维修详情"] != "")
@@ -530,6 +530,36 @@ check("重判：修正明细含原/新标签",
       and rl_diff[0]["新标签"] == "重复")
 _, rl_n2, _ = relabel_repeat(rl_df)
 check("重判幂等", rl_n2 == 0)
+
+print("== 15. 重复窗口 = 3 天（同 SN 3 天内算重复）==")
+from repeat import (RepeatClassifier as _RC, count_episodes as _ce,
+                    DUP_WINDOW_DAYS as _DW, days_between as _db)
+
+check("默认重复窗口为 3 天", _DW == 3)
+check("日期差计算", _db("2026-10-07", "2026-10-12") == 5)
+
+_w_recs = [
+    {"pos": 0, "sn": "W", "date": "2026/10/07", "desc": "a", "detail": "a"},
+    {"pos": 1, "sn": "W", "date": "2026/10/10", "desc": "b", "detail": "b"},  # +3
+    {"pos": 2, "sn": "W", "date": "2026/10/12", "desc": "c", "detail": "c"},  # +2
+    {"pos": 3, "sn": "W", "date": "2026/10/30", "desc": "d", "detail": "d"},  # +18
+    {"pos": 4, "sn": "W", "date": "2026/11/30", "desc": "e", "detail": "e"},  # +31
+]
+_wp = {k: v["label"] for k, v in _RC().build_plan(_w_recs).items()}
+check("首现不标记", _wp[0] is None)
+check("相隔 3 天 → 重复", _wp[1] == "重复")
+check("相隔 2 天 → 重复", _wp[2] == "重复")
+check("相隔 18 天 → 二返（窗口内重复不重复计次）", _wp[3] == "二返")
+check("相隔 31 天 → 三返", _wp[4] == "三返")
+
+_wp0 = {k: v["label"] for k, v in _RC(dup_window_days=0).build_plan(_w_recs).items()}
+check("窗口 0 天 → 相隔 3 天改判二返", _wp0[1] == "二返")
+
+check("返修次数聚类：3 天内连续日期算 1 次",
+      _ce(["2026-10-07", "2026-10-10", "2026-10-12"], 3) == 1)
+check("返修次数聚类：相隔 18 天算 2 次",
+      _ce(["2026-10-07", "2026-10-30"], 3) == 2)
+check("返修次数聚类：空值返回 0", _ce([], 3) == 0)
 
 print()
 failed = [n for n, ok in PASS if not ok]
