@@ -238,6 +238,7 @@ streamlit run main.py
 ticket_processor/
 ├── run.bat            ← 双击启动（推荐）
 ├── start.bat          ← 兼容入口，等价于 run.bat
+├── backup.bat         ← 双击备份数据（state/ + 缓存）
 ├── launch.py          ← 启动器：查依赖 / 挑端口 / 开浏览器
 ├── main.py            ← 入口，左侧分组导航
 ├── app.py             ← 🔧 工单处理页
@@ -258,6 +259,7 @@ ticket_processor/
 | 文件 | 说明 |
 |---|---|
 | `run.bat` / `start.bat` | 双击启动，等价于 `streamlit run main.py` |
+| `backup.bat` | 双击备份 `state/` + 缓存到 `backup/`（见「数据备份」） |
 | `launch.py` | 启动器：依赖检查 / 自动装依赖 / 挑空闲端口 / 开浏览器 |
 | `main.py` | **统一入口**（左侧分组切换三个页面） |
 | `app.py` | 工单处理页面 |
@@ -295,8 +297,29 @@ ticket_processor/
 
 ### `tools/`（调试 / 一次性脚本）
 
-`_smoke_test.py`（冒烟测试）、`debug_*.py`、`test_*.py`、`sk_*.py`、`config_au_optimized.py`、`processor_kr_enhanced.py` 等。
-这些脚本**不参与网页运行**，只是排查问题时用，删掉也不影响主流程。
+`backup.py`（数据备份）、`_smoke_test.py`（冒烟测试）、`debug_*.py`、`test_*.py`、`sk_*.py`、`config_au_optimized.py`、`processor_kr_enhanced.py` 等。
+除 `backup.py` 外这些脚本**不参与网页运行**，只是排查问题时用，删掉也不影响主流程。
+
+## 数据备份
+
+`state/` 和 `data/fault_mapping*.json` **不在 git 里**（含真实工单 / 缓存），是**唯一副本**，误删之后没法从 GitHub 找回来。
+
+双击根目录的 **`backup.bat`** 就行：
+
+- 把 `state/` + `data/fault_mapping*.json` 打包成 `backup/backup_YYYYMMDD-HHMMSS.zip`（约 2–3 MB）
+- 自动只保留最近 10 份，更早的自动清理
+- **恢复**：把 zip 里的 `state/`、`data/` 解压回项目根目录覆盖即可
+
+命令行用法：
+
+```bash
+python tools/backup.py                # 备份（保留 10 份）
+python tools/backup.py --keep 20      # 保留 20 份
+python tools/backup.py --list         # 看现有备份
+python tools/backup.py --out D:/bak   # 备份到别的盘 / 网盘同步目录（更保险）
+```
+
+> 建议每周点一次。想更稳妥可以把 `--out` 指到 OneDrive / 坚果云这类同步目录，或者告诉我帮你加个 Windows 计划任务每天自动跑。
 
 ## 注意
 

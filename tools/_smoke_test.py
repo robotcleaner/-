@@ -756,6 +756,35 @@ check("缺密钥时抛 RuntimeError", _raise_ok)
 check("报错里带修复指引（含环境变量名）", "SILICONFLOW_API_KEY" in _msg)
 check("恢复后能正常取回密钥状态", isinstance(_llm.has_api_key(), bool))
 
+print("== 21. 数据备份 tools/backup.py ==")
+import contextlib as _ctx
+import io as _io3
+import zipfile as _zf
+from pathlib import Path as _Path
+import backup as _bk
+
+_bk_files = _bk.collect_files()
+check("备份清单非空", len(_bk_files) >= 1)
+check("清单含 state 断点文件", any(a.startswith("state/") for _, a in _bk_files))
+check("清单含故障对照缓存", any(a.startswith("data/fault_mapping") for _, a in _bk_files))
+
+_bk_dir = _Path(tempfile.mkdtemp()) / "bk"
+with _ctx.redirect_stdout(_io3.StringIO()):
+    _zip = _bk.make_backup(_bk_dir, keep=2)
+check("生成了备份 zip", _zip is not None and _zip.exists())
+check("zip 里文件数与清单一致",
+      len(_zf.ZipFile(_zip).namelist()) == len(_bk_files))
+check("zip 完整可读", _zf.ZipFile(_zip).testzip() is None)
+
+for _i in range(3):
+    (_bk_dir / f"backup_2026010{_i}-000000.zip").write_bytes(b"x")
+with _ctx.redirect_stdout(_io3.StringIO()):
+    _bk.prune(_bk_dir, 2)
+check("只保留最近 N 份备份",
+      len(list(_bk_dir.glob("backup_*.zip"))) == 2)
+check("backup.bat 为纯 ASCII",
+      all(b < 128 for b in open(os.path.join(_ROOT, "backup.bat"), "rb").read()))
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")
