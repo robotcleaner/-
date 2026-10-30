@@ -11,6 +11,40 @@
 **启动（Windows 最省事）**：双击 **`run.bat`**，浏览器会自动打开，不用碰命令行。
 其它方式：`streamlit run main.py`（入口是 `main.py`，不是 `app.py`）
 
+## 其他人怎么用
+
+按省事程度排序，三种方式任选：
+
+### ① 下载 zip，双击 run.bat（本地跑，用自己的密钥）
+
+1. 仓库右上角 **Code → Download ZIP**，解压到任意目录（路径别带特殊符号）
+2. 双击解压出来的 **`run.bat`**
+   - 需要 Python 3.10+；没装会提示下载地址（安装时记得勾选 *Add python.exe to PATH*）
+   - 首次运行会自动 `pip install` 依赖，约 1–3 分钟，之后秒开
+   - 浏览器自动打开，**关掉黑色窗口就停止服务**
+3. 配密钥：把 `.env.example` 复制一份改名 `.env`，填入自己的
+   [硅基流动](https://cloud.siliconflow.cn/account/ak) API Key：
+
+   ```
+   SILICONFLOW_API_KEY=sk-你自己的key
+   ```
+
+> 没有密钥也能打开页面、看界面，但**点「开始处理」会报错**——翻译和分类都要调 LLM。
+
+### ② 自己部署一份网页（推荐给团队用，数据互不干扰）
+
+[![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=https://github.com/robotcleaner/-&branch=main&mainModule=main.py)
+
+点上面的按钮 → 用 GitHub 账号授权 → 在 Secrets 里填 `SILICONFLOW_API_KEY = "sk-..."` → Deploy。
+一两分钟后得到一个 `https://xxx.streamlit.app` 链接，发给谁谁都能用（对方不用装任何东西）。
+
+> 每人部署一份 = 每人独立的实例和缓存，互不干扰。共用同一个链接时，同一时间建议只有一人处理。
+
+### ③ 直接用现成的在线链接
+
+如果维护者已经部署好，直接打开那个 `https://xxx.streamlit.app` 就行，零安装。
+
+
 ## 支持区域
 
 | 区域 | 服务商 | 原始表语言 |
