@@ -4,18 +4,46 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from paths import state_path
 from config import (
-    SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,
+    SILICONFLOW_BASE_URL, get_api_key,
     MODEL_TRANSLATE, MODEL_CLASSIFY,
     TEMPERATURE, MAX_TOKENS, TIMEOUT, MAX_RETRY,
 )
 from prompts import PROMPTS
 from batch import JsonStore
 
-client = OpenAI(
-    api_key=SILICONFLOW_API_KEY,
-    base_url=SILICONFLOW_BASE_URL,
-    timeout=TIMEOUT,
+# 客户端改为「按需创建」：旧实现在 import 阶段就 new OpenAI()，
+# 一旦密钥没配好（本地没 .env / 云端没 Secrets），整个页面直接抛红字堆栈，
+# 用户完全看不出该怎么修。现在改成调用时才创建，缺密钥由界面给出明确提示。
+_client = None
+_client_key = ""
+
+NO_KEY_HINT = (
+    "未配置 SILICONFLOW_API_KEY。\n"
+    "· 本地：在项目根目录的 .env 里写 SILICONFLOW_API_KEY=sk-你的key\n"
+    "· Streamlit Cloud：Settings → Secrets 里写 SILICONFLOW_API_KEY = \"sk-你的key\"，"
+    "保存后点 Reboot app"
 )
+
+
+def get_client():
+    """返回 OpenAI 客户端；缺密钥时抛带操作指引的 RuntimeError。"""
+    global _client, _client_key
+    key = get_api_key()
+    if not key:
+        raise RuntimeError(NO_KEY_HINT)
+    # 密钥变了（比如换了新 Key）就重建客户端
+    if _client is None or key != _client_key:
+        _client = OpenAI(
+            api_key=key,
+            base_url=SILICONFLOW_BASE_URL,
+            timeout=TIMEOUT,
+        )
+        _client_key = key
+    return _client
+
+
+def has_api_key() -> bool:
+    return bool(get_api_key())
 
 # ==================== 磁盘缓存 ====================
 # 旧实现：每新增一条翻译就全量重写 .cache.json（已 1MB+），缓存越大越慢，
@@ -55,7 +83,7 @@ def _is_empty(text) -> bool:
 @retry(stop=stop_after_attempt(MAX_RETRY),
        wait=wait_exponential(multiplier=1, min=2, max=10))
 def _call_llm(prompt: str, model: str) -> str:
-    resp = client.chat.completions.create(
+    resp = get_client().chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
         temperature=TEMPERATURE,

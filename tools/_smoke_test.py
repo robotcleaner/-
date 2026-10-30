@@ -736,6 +736,26 @@ check("挑端口落在 8501-8510",
       _launch.DEFAULT_PORT <= _launch.pick_port(_launch.DEFAULT_PORT) <= _launch.MAX_PORT)
 check("run.bat 存在且为纯 ASCII", (lambda p: os.path.isfile(p) and all(b < 128 for b in open(p, "rb").read()))(os.path.join(_ROOT, "run.bat")))
 
+print("== 20. 缺密钥时不整页崩（云端最常见故障）==")
+import llm_client as _llm
+check("has_api_key 返回 bool", isinstance(_llm.has_api_key(), bool))
+check("客户端不在 import 阶段创建（有密钥时也没提前建）",
+      _llm._client is None or bool(_llm._client_key))
+_orig_get_key = _llm.get_api_key
+_llm.get_api_key = lambda: ""
+try:
+    _llm.get_client()
+    _raise_ok = False
+    _msg = ""
+except RuntimeError as _e:            # noqa: BLE001
+    _raise_ok = True
+    _msg = str(_e)
+finally:
+    _llm.get_api_key = _orig_get_key
+check("缺密钥时抛 RuntimeError", _raise_ok)
+check("报错里带修复指引（含环境变量名）", "SILICONFLOW_API_KEY" in _msg)
+check("恢复后能正常取回密钥状态", isinstance(_llm.has_api_key(), bool))
+
 print()
 failed = [n for n, ok in PASS if not ok]
 print(f"共 {len(PASS)} 项，失败 {len(failed)} 项")

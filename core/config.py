@@ -28,6 +28,16 @@ SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
 MODEL_TRANSLATE = "deepseek-ai/DeepSeek-V3"
 MODEL_CLASSIFY  = "deepseek-ai/DeepSeek-V3"
 
+
+def get_api_key() -> str:
+    """每次调用都重新读一遍密钥。
+
+    模块级常量只在 import 时取一次；Streamlit 里改了 Secrets 或 .env 后
+    进程不会重启，用这个函数才能立刻生效，也能在界面上做「有没有配密钥」的判断。
+    """
+    return (_get_secret("SILICONFLOW_API_KEY", "") or "").strip()
+
+
 TEMPERATURE = 0.1
 MAX_TOKENS  = 2000
 TIMEOUT     = 60

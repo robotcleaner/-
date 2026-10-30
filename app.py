@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from paths import state_path
+from llm_client import has_api_key
 
 from processor import process_dataframe as process_dataframe_au
 from config import OUTPUT_COLUMNS as OUTPUT_COLUMNS_AU, MAX_WORKERS
@@ -60,6 +61,23 @@ def _kp_opts():
 
 st.title("🔧 维修工单自动处理工具")
 st.caption("上传海外维修商原始工单 → 自动翻译 + 分类 + 格式化 → 输出标准化工单")
+
+# 没配密钥时不要整页崩成红字堆栈，直接给出可照做的修复步骤
+if not has_api_key():
+    st.error(
+        "**这台机器还没配置 API Key，工单处理无法启动。**\n\n"
+        "翻译和故障分类都要调用大模型，所以必须先填密钥：\n\n"
+        "- **本地运行**：在项目根目录新建 `.env`，写入 `SILICONFLOW_API_KEY=sk-你的key`，"
+        "然后重开 `run.bat`\n"
+        "- **Streamlit Cloud**：右下角 **Manage app → Settings → Secrets**，写入\n"
+        "  ```toml\n"
+        "  SILICONFLOW_API_KEY = \"sk-你的key\"\n"
+        "  ```\n"
+        "  保存后点 **Reboot app**\n\n"
+        "密钥申请地址：https://cloud.siliconflow.cn/account/ak\n\n"
+        "> 左侧「🏆 重点产品故障排名」不需要密钥，可以直接用。"
+    )
+    st.stop()
 
 # ========== 区域选择 ==========
 region = st.selectbox(
